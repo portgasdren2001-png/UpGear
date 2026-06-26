@@ -63,14 +63,15 @@ function ScoreDim({ label, score }) {
 
 /* ─── Main Component ─── */
 
-export default function ContentStudio({ data }) {
+export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock }) {
   const { items } = data;
 
   /* Step state */
   const [step, setStep] = useState(1); // 1=setup 2=themes 3=hooks 4=build 5=analyze
 
   /* Setup */
-  const [selectedItemId, setSelectedItemId] = useState(items[0]?.id ?? "");
+  const [selectedItemId, setSelectedItemIdLocal] = useState(initItemId ?? items[0]?.id ?? "");
+  const setSelectedItemId = (id) => { setSelectedItemIdLocal(id); syncItemId?.(id); };
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(null);
 
@@ -193,8 +194,18 @@ export default function ContentStudio({ data }) {
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
       {/* Item select */}
       <Card>
-        <CardTitle>アイテム選択</CardTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <CardTitle style={{ marginBottom: 0 }}>アイテム選択</CardTitle>
+          {onNavToStock && item && (
+            <button
+              onClick={() => onNavToStock(item.id)}
+              style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", padding: "4px 10px", cursor: "pointer" }}
+            >
+              ◉ ストックを編集
+            </button>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
           {items.map((it) => (
             <div
               key={it.id}
@@ -245,6 +256,24 @@ export default function ContentStudio({ data }) {
             ))}
           </div>
         </Card>
+        {/* Stock preview */}
+        {item?.stock && (
+          <Card style={{ background: "var(--bg3)", border: "1px solid var(--border)", marginTop: 4 }}>
+            <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>ストックデータ（{item.label}）</div>
+            {[
+              { key: "situation", label: "状況" },
+              { key: "hook",      label: "フック" },
+              { key: "conclusion",label: "結論" },
+            ].map(({ key, label }) => (
+              <div key={key} style={{ display: "flex", gap: 8, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", width: 40, flexShrink: 0 }}>{label}</div>
+                <div style={{ fontSize: 11, color: item.stock[key] ? "var(--text)" : "#50545e", lineHeight: 1.4 }}>
+                  {item.stock[key] || "（未入力）"}
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
         <Btn onClick={doResearch} style={{ alignSelf: "flex-end" }}>マーケット調査 → テーマ生成 ▶</Btn>
       </div>
     </div>

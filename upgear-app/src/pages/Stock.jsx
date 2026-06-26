@@ -68,11 +68,12 @@ const BLANK_ITEM = {
   stock: { situation: "", hook: "", reveal: "", change: "", good: "", ng1: "", ng2: "", conclusion: "" },
 };
 
-export default function Stock({ data, addItem, updateItem, deleteItem }) {
+export default function Stock({ data, addItem, updateItem, deleteItem, selectedItemId, setSelectedItemId, onNavToStudio }) {
   const { items } = data;
-  const [selected, setSelected] = useState(null);
+  const initItem = selectedItemId ? (items.find((i) => i.id === selectedItemId) ?? null) : null;
+  const [selected, setSelected] = useState(initItem);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(BLANK_ITEM);
+  const [form, setForm] = useState(initItem ? JSON.parse(JSON.stringify(initItem)) : BLANK_ITEM);
   const [isNew, setIsNew] = useState(false);
 
   const open = (item) => {
@@ -80,6 +81,7 @@ export default function Stock({ data, addItem, updateItem, deleteItem }) {
     setForm(JSON.parse(JSON.stringify(item)));
     setEditing(false);
     setIsNew(false);
+    setSelectedItemId?.(item.id);
   };
 
   const openNew = () => {
@@ -161,6 +163,9 @@ export default function Stock({ data, addItem, updateItem, deleteItem }) {
                   {isNew ? "NEW ITEM" : `No.${form.no} · ${form.category}`}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
+                  {!editing && onNavToStudio && (
+                    <Btn small variant="primary" onClick={() => onNavToStudio((selected || form).id)}>▣ 制作スタジオへ</Btn>
+                  )}
                   {!editing && <CopyBtn text={generateCopyText(selected || form)} label="Claude用コピー" />}
                   {!editing && <Btn small onClick={() => setEditing(true)}>編集</Btn>}
                   {!editing && selected && <Btn small variant="danger" onClick={del}>削除</Btn>}
