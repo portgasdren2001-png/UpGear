@@ -36,7 +36,16 @@ export function getMarketResearch(category) {
 export function generateThemes(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  return [
+  const s = item.stock || {};
+
+  const stockThemes = [];
+  if (s.situation) stockThemes.push(`${s.situation.slice(0, 20)}…だった話`);
+  if (s.reveal)    stockThemes.push(`${s.reveal.slice(0, 20)}…の瞬間に気づいた`);
+  if (s.change)    stockThemes.push(`${s.change.slice(0, 20)}…になった理由`);
+  if (s.conclusion) stockThemes.push(s.conclusion);
+  if (s.ng1)       stockThemes.push(`${nick}が向いてない人の特徴　${s.ng1.slice(0, 15)}の話`);
+
+  const generic = [
     `半年使って分かった${nick}の正直な話`,
     `${nick}を買って後悔した人がやってたこと`,
     `毎日使う人には必須　${nick}の話`,
@@ -51,13 +60,14 @@ export function generateThemes(item) {
     `買って1週間で気づいたこと`,
     `${cat}選びで失敗しないために`,
     `正直レビュー　良いとこ悪いとこ全部`,
-    `向いてない人の特徴3つ`,
     `コスパで考えたら答えは決まってた`,
     `毎日使って初めて分かること`,
     `買う前に5分だけ見て`,
     `${nick}で変わった1つのこと`,
     `失敗しない${cat}選びの基準`,
   ];
+
+  return [...stockThemes, ...generic].slice(0, 20);
 }
 
 // ─── Hook Generation ─────────────────────────────────────────────────────────
@@ -66,29 +76,43 @@ export function generateHooks(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
   const s = item.stock || {};
+  const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "1万円";
 
-  return [
+  const stockHooks = [];
+  if (s.hook)     stockHooks.push({ type: "体験", text: s.hook, fromStock: true });
+  if (s.situation) {
+    const sit = s.situation.slice(0, 25);
+    stockHooks.push({ type: "共感", text: `${sit}…　俺もそうだった`, fromStock: true });
+  }
+  if (s.reveal) {
+    stockHooks.push({ type: "体験", text: `${s.reveal.slice(0, 25)}…　その瞬間に確信した`, fromStock: true });
+  }
+  if (s.conclusion) {
+    stockHooks.push({ type: "逆張り", text: s.conclusion, fromStock: true });
+  }
+  if (s.ng1) {
+    stockHooks.push({ type: "NG", text: `${s.ng1.slice(0, 30)}…　向いてない人がいる`, fromStock: true });
+  }
+
+  const generic = [
     { type: "逆張り", text: `${nick}をまだ選んでいるか　俺は1年前に決断した` },
     { type: "逆張り", text: `まだ普通の${cat}使ってるの？` },
     { type: "逆張り", text: `${nick}　買わなくていい人がいる` },
     { type: "逆張り", text: `正直いらんと思ってた　でも今は毎日使ってる` },
-    { type: "逆張り", text: `${cat}に${item.price ? `¥${Number(item.price).toLocaleString()}` : "1万円"}出す前に見て` },
-    { type: "体験", text: s.hook || `俺が${nick}を選んだ理由` },
-    { type: "体験", text: `${nick}を半年使って正直に言う` },
-    { type: "体験", text: `買ってから毎日使ってる　それだけで答えは出てる` },
-    { type: "体験", text: `最初は半信半疑だった　使って3日で確信した` },
-    { type: "体験", text: `見た目で選んで　機能で確信した` },
-    { type: "共感", text: `${cat}選びで5分以上迷ったことある？` },
-    { type: "共感", text: `毎朝同じ悩みを繰り返してた` },
-    { type: "共感", text: `なんでもっと早く気づかなかったんだろ` },
-    { type: "共感", text: `これ知らなかった人絶対損してる` },
-    { type: "共感", text: `同じ失敗をしてほしくないから言う` },
+    { type: "逆張り", text: `${cat}に${price}出す前に見て` },
+    { type: "体験",   text: `${nick}を半年使って正直に言う` },
+    { type: "体験",   text: `買ってから毎日使ってる　それだけで答えは出てる` },
+    { type: "体験",   text: `最初は半信半疑だった　使って3日で確信した` },
+    { type: "共感",   text: `${cat}選びで5分以上迷ったことある？` },
+    { type: "共感",   text: `なんでもっと早く気づかなかったんだろ` },
+    { type: "共感",   text: `同じ失敗をしてほしくないから言う` },
     { type: "チェック", text: `${nick}を買う前に確認しろ　後悔するパターンがある` },
     { type: "チェック", text: `買う前に3つだけ確認して` },
-    { type: "チェック", text: `向いてない人の特徴を先に言う` },
-    { type: "NG", text: `${nick}で後悔した話` },
-    { type: "NG", text: `ここだけは失敗した　正直に言う` },
+    { type: "NG",     text: `${nick}で後悔した話` },
+    { type: "NG",     text: `ここだけは失敗した　正直に言う` },
   ];
+
+  return [...stockHooks, ...generic];
 }
 
 // ─── Formats ─────────────────────────────────────────────────────────────────
@@ -357,6 +381,76 @@ export function analyzePerformance({ views, likes, saves, comments, follows, hoo
   nextTips.push(`${likeR >= 3 ? "このフックパターン" : "B型逆張りフック"}を次のシリーズで試してみよう。`);
 
   return { likeRate: likeR, saveRate: saveR, reasons, improvements, nextTips };
+}
+
+// ─── SNS Marketing Analysis ──────────────────────────────────────────────────
+
+export function analyzeSNSPotential(item, hook, format) {
+  const hookText = (hook && typeof hook === "object") ? (hook.text || "") : (hook || "");
+  const hookType = (hook && typeof hook === "object") ? (hook.type || "") : "";
+  const s = item.stock || {};
+
+  // 当事者の広さ (0-30): 誰が対象か
+  const audienceMap = { GEAR: 30, SHOES: 20, WEAR: 18 };
+  const audience = audienceMap[item.category] ?? 20;
+  const audienceLabel = audience >= 28 ? "デスクワーカー全員" : audience >= 20 ? "通勤・外出者" : "ファッション関心層";
+
+  // バズ型スコア (0-25): B型逆張り、フック強度
+  const isReverse = hookType === "逆張り" || hookText.includes("まだ") || hookText.includes("なぜ") || hookText.includes("やめた");
+  const hasIchi = hookText.includes("俺") || hookText.includes("俺が");
+  const isQuestion = hookText.includes("か") && hookText.length < 30;
+  const buzzScore = Math.min(25,
+    (isReverse ? 10 : 0) + (hasIchi ? 8 : 0) + (isQuestion ? 7 : 0)
+  );
+
+  // 保存型スコア (0-20): C型チェックリスト、保存ワード
+  const saveFormats = ["check", "rank", "compare"];
+  const hasSaveFormat = saveFormats.includes(format);
+  const hasSaveWords = s.conclusion?.includes("確認") || s.ng1?.includes("確認");
+  const saveScore = Math.min(20, (hasSaveFormat ? 12 : 4) + (hasSaveWords ? 4 : 0) + (s.ng1 ? 4 : 0));
+
+  // TikTok適合度 (0-15): フォーマット・フックの組み合わせ
+  const tiktokScore = Math.min(15,
+    (hookText.length > 8 && hookText.length < 35 ? 6 : 2) +
+    (format === "story" || format === "fail" ? 5 : 3) +
+    (s.situation ? 4 : 0)
+  );
+
+  // ストック充実度 (0-10): ストックデータの埋まり具合
+  const stockFields = ["situation", "hook", "reveal", "change", "good", "ng1", "ng2", "conclusion"];
+  const filledCount = stockFields.filter(k => s[k] && s[k].trim()).length;
+  const stockScore = Math.round((filledCount / stockFields.length) * 10);
+
+  const total = audience + buzzScore + saveScore + tiktokScore + stockScore;
+
+  // 推定リーチ予測
+  let reachRange = "";
+  if (total >= 80)      reachRange = "5,000〜30,000再生";
+  else if (total >= 65) reachRange = "1,500〜8,000再生";
+  else if (total >= 50) reachRange = "500〜3,000再生";
+  else                  reachRange = "〜1,000再生";
+
+  // 型判定
+  const postType = buzzScore >= 18 ? "B型（バズ狙い）" : saveScore >= 14 ? "C型（保存狙い）" : "A型（教育型）";
+
+  // 課題と改善提案
+  const issues = [];
+  if (audience < 20)    issues.push({ dim: "当事者の広さ", tip: "GEARカテゴリは当事者が最も広い。テーマを「全デスクワーカー」が当事者になる視点に広げよう。" });
+  if (buzzScore < 15)   issues.push({ dim: "バズ型フック", tip: "「まだ〇〇してるの？」「俺は〜した」の逆張り一人称フックに変えるとB型になる。" });
+  if (saveScore < 10)   issues.push({ dim: "保存されやすさ", tip: "チェックリスト型（C型）やNG提示を追加すると保存率が上がる。" });
+  if (stockScore < 6)   issues.push({ dim: "ストック充実度", tip: "ストック画面で体験データを埋めると、より具体的なコンテンツが生成される。" });
+  if (!s.reveal)        issues.push({ dim: "露見シーン", tip: "「元に戻れなくなった瞬間」のエピソードがないと2枚目維持率が下がる。ストックに追記しよう。" });
+
+  return {
+    total,
+    breakdown: { audience, buzz: buzzScore, saves: saveScore, tiktok: tiktokScore, stock: stockScore },
+    audienceLabel,
+    reachRange,
+    postType,
+    filledCount,
+    stockTotal: stockFields.length,
+    issues,
+  };
 }
 
 // ─── Regeneration Modes ───────────────────────────────────────────────────────

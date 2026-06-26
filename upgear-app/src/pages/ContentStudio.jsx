@@ -11,10 +11,31 @@ import {
   generateHashtags,
   scoreQuality,
   analyzePerformance,
+  analyzeSNSPotential,
   REGEN_MODES,
 } from "../data/contentAI";
 
-/* ─── tiny sub-components ─── */
+/* ─── helpers ─── */
+
+function optToText(opt) {
+  if (!opt) return "";
+  if (typeof opt === "string") return opt;
+  if (opt.sub !== undefined || opt.main !== undefined) {
+    return [opt.sub, opt.main, opt.note].filter(Boolean).join("  /  ");
+  }
+  return opt.text || "";
+}
+
+function optToScript(opt, role) {
+  if (!opt) return "";
+  if (typeof opt === "string") return opt;
+  if (opt.sub !== undefined || opt.main !== undefined) {
+    return `サブ: ${opt.sub || ""}\nメイン: ${opt.main || ""}\n補足: ${opt.note || ""}`;
+  }
+  return opt.text || "";
+}
+
+/* ─── sub-components ─── */
 
 function SectionLabel({ children, color = "var(--accent)" }) {
   return (
@@ -24,7 +45,9 @@ function SectionLabel({ children, color = "var(--accent)" }) {
   );
 }
 
-function OptionCard({ text, selected, onClick, label, dim }) {
+function SlideOptionCard({ opt, selected, onClick, label }) {
+  const text = optToText(opt);
+  const isHookFormat = opt && (opt.sub !== undefined || opt.main !== undefined);
   return (
     <div
       onClick={onClick}
@@ -35,28 +58,51 @@ function OptionCard({ text, selected, onClick, label, dim }) {
         padding: "10px 12px",
         cursor: "pointer",
         transition: "border-color 0.15s, background 0.15s",
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
+        minHeight: 70,
       }}
     >
-      {label && <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.12em" }}>{label}</div>}
-      <div style={{ fontSize: 12, color: selected ? "var(--text)" : "var(--text-dim)", lineHeight: 1.6 }}>{text}</div>
-      {dim && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{dim}</div>}
+      <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.12em", marginBottom: 6 }}>{label}</div>
+      {isHookFormat ? (
+        <div>
+          <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 2 }}>サブ</div>
+          <div style={{ fontSize: 11, color: selected ? "var(--text)" : "var(--text-dim)" }}>{opt.sub}</div>
+          <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 6, marginBottom: 2 }}>メイン</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: selected ? "var(--text)" : "var(--text-dim)" }}>{opt.main}</div>
+          {opt.note && <>
+            <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 6, marginBottom: 2 }}>補足</div>
+            <div style={{ fontSize: 11, color: selected ? "var(--text-dim)" : "#50545e" }}>{opt.note}</div>
+          </>}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: selected ? "var(--text)" : "var(--text-dim)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{text}</div>
+      )}
     </div>
   );
 }
 
-function ScoreDim({ label, score }) {
-  const pct = Math.round((score / 20) * 100);
-  const color = score >= 16 ? "var(--accent)" : score >= 12 ? "#6fa8dc" : "var(--border)";
+function ScoreDim({ label, score, max = 20 }) {
+  const pct = Math.round((score / max) * 100);
+  const color = pct >= 80 ? "var(--accent)" : pct >= 55 ? "#6fa8dc" : "var(--border)";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-      <div style={{ fontSize: 11, color: "var(--text-dim)", width: 90 }}>{label}</div>
-      <div style={{ flex: 1, height: 4, background: "var(--bg2)", borderRadius: 0 }}>
+      <div style={{ fontSize: 11, color: "var(--text-dim)", width: 100 }}>{label}</div>
+      <div style={{ flex: 1, height: 4, background: "var(--bg2)" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, transition: "width 0.4s" }} />
       </div>
-      <div style={{ fontSize: 12, color, width: 32, textAlign: "right" }}>{score}/20</div>
+      <div style={{ fontSize: 12, color, width: 40, textAlign: "right" }}>{score}/{max}</div>
+    </div>
+  );
+}
+
+function OptionCard({ text, selected, onClick, dim }) {
+  return (
+    <div onClick={onClick} style={{
+      background: selected ? "rgba(255,107,0,0.12)" : "var(--bg2)",
+      border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+      borderRadius: 4, padding: "10px 12px", cursor: "pointer",
+    }}>
+      <div style={{ fontSize: 12, color: selected ? "var(--text)" : "var(--text-dim)", lineHeight: 1.6 }}>{text}</div>
+      {dim && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4 }}>{dim}</div>}
     </div>
   );
 }
@@ -66,30 +112,27 @@ function ScoreDim({ label, score }) {
 export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock }) {
   const { items } = data;
 
-  /* Step state */
-  const [step, setStep] = useState(1); // 1=setup 2=themes 3=hooks 4=build 5=analyze
-
-  /* Setup */
+  const [step, setStep] = useState(1);
   const [selectedItemId, setSelectedItemIdLocal] = useState(initItemId ?? items[0]?.id ?? "");
   const setSelectedItemId = (id) => { setSelectedItemIdLocal(id); syncItemId?.(id); };
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(null);
 
-  /* Generated content */
   const [market, setMarket] = useState(null);
   const [themes, setThemes] = useState([]);
   const [selectedTheme, setSelectedTheme] = useState(null);
   const [hooks, setHooks] = useState([]);
   const [selectedHook, setSelectedHook] = useState(null);
   const [regenMode, setRegenMode] = useState(null);
-  const [slides, setSlides] = useState([]); // [{slide,options,selected}]
+  const [slides, setSlides] = useState([]);
   const [captions, setCaptions] = useState([]);
   const [selectedCaption, setSelectedCaption] = useState(0);
   const [hashtags, setHashtags] = useState("");
   const [quality, setQuality] = useState(null);
+  const [snsAnalysis, setSnsAnalysis] = useState(null);
+  const [scriptView, setScriptView] = useState(false);
 
-  /* Analytics */
-  const [analytics, setAnalytics] = useState({ views: "", likes: "", saves: "", comments: "", follows: "", hook: "" });
+  const [analytics, setAnalytics] = useState({ views: "", likes: "", saves: "", comments: "", follows: "" });
   const [perfResult, setPerfResult] = useState(null);
 
   const item = items.find((i) => i.id === selectedItemId) ?? items[0];
@@ -97,90 +140,83 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   /* ─── Actions ─── */
 
   const doResearch = useCallback(() => {
-    const m = getMarketResearch(item?.category ?? "GEAR");
-    setMarket(m);
-    const t = generateThemes(item);
-    setThemes(t);
+    setMarket(getMarketResearch(item?.category ?? "GEAR"));
+    setThemes(generateThemes(item));
     setSelectedTheme(null);
     setStep(2);
   }, [item]);
 
   const doHooks = useCallback(() => {
-    const h = generateHooks(item);
-    setHooks(h);
+    setHooks(generateHooks(item));
     setSelectedHook(null);
     setStep(3);
   }, [item]);
 
   const doBuild = useCallback((hookOverride) => {
     const hObj = hookOverride ?? selectedHook ?? (hooks[0] ?? { text: "" });
-    const h = hObj.text ?? hObj;
+    const h = typeof hObj === "object" ? (hObj.text ?? "") : hObj;
     const fmt = selectedFormat ?? FORMATS[0].id;
-    const mode = regenMode;
-    const ss = generateAllSlides(item, h, fmt, mode);
-    const caps = generateCaption(item, hObj);
-    const tags = generateHashtags(item);
+    const ss = generateAllSlides(item, h, fmt, regenMode);
     setSlides(ss.map((s) => ({ ...s, selected: 0 })));
-    setCaptions(caps);
-    setHashtags(tags);
+    setCaptions(generateCaption(item, hObj));
+    setHashtags(generateHashtags(item));
     setQuality(null);
+    setSnsAnalysis(null);
+    setScriptView(false);
     setStep(4);
   }, [item, selectedHook, selectedFormat, regenMode, hooks]);
 
   const doScore = useCallback(() => {
-    const selected = slides.map((s) => s.options[s.selected]);
-    const q = scoreQuality(selected, selectedHook?.text ?? "");
-    setQuality(q);
+    const sel = slides.map((s) => s.options[s.selected]);
+    setQuality(scoreQuality(sel, selectedHook?.text ?? ""));
   }, [slides, selectedHook]);
 
+  const doSNS = useCallback(() => {
+    setSnsAnalysis(analyzeSNSPotential(item, selectedHook, selectedFormat ?? FORMATS[0].id));
+  }, [item, selectedHook, selectedFormat]);
+
   const doAnalyze = useCallback(() => {
-    const r = analyzePerformance({ ...analytics, hook: selectedHook?.text ?? analytics.hook });
-    setPerfResult(r);
+    setPerfResult(analyzePerformance({ ...analytics, hook: selectedHook?.text ?? "" }));
   }, [analytics, selectedHook]);
 
-  const selectSlideOption = (slideIdx, optIdx) => {
-    setSlides((prev) => prev.map((s, i) => i === slideIdx ? { ...s, selected: optIdx } : s));
-  };
+  const selectSlideOption = (si, oi) =>
+    setSlides((prev) => prev.map((s, i) => i === si ? { ...s, selected: oi } : s));
 
   const doRegen = (mode) => {
     setRegenMode(mode.id);
     const hObj = selectedHook ?? (hooks[0] ?? { text: "" });
-    const h = hObj.text ?? hObj;
-    const fmt = selectedFormat ?? FORMATS[0].id;
-    const ss = generateAllSlides(item, h, fmt, mode.id);
+    const h = typeof hObj === "object" ? (hObj.text ?? "") : hObj;
+    const ss = generateAllSlides(item, h, selectedFormat ?? FORMATS[0].id, mode.id);
     setSlides(ss.map((s) => ({ ...s, selected: 0 })));
   };
-
-  /* ─── Copy helpers ─── */
 
   const copyText = (txt) => navigator.clipboard.writeText(txt).catch(() => {});
 
   const buildFullScript = () => {
-    const lines = slides.map((s, i) => `【スライド${i + 1}】\n${s.options[s.selected]}`).join("\n\n");
+    const lines = slides.map((s, i) =>
+      `【スライド${i + 1} — ${s.role}】\n${optToScript(s.options[s.selected], s.role)}`
+    ).join("\n\n");
     const cap = captions[selectedCaption] ?? "";
     return `${lines}\n\n【キャプション】\n${cap}\n\n【ハッシュタグ】\n${hashtags}`;
   };
 
-  /* ─── STEP BAR ─── */
+  /* ─── Step bar ─── */
 
-  const STEPS = ["セットアップ", "テーマ選択", "フック選択", "スライド構築", "投稿分析"];
+  const STEPS = ["セットアップ", "テーマ", "フック", "スライド構築", "投稿分析"];
 
   const stepBar = (
-    <div style={{ display: "flex", gap: 0, marginBottom: 24, borderBottom: "1px solid var(--border)" }}>
+    <div style={{ display: "flex", marginBottom: 24, borderBottom: "1px solid var(--border)" }}>
       {STEPS.map((s, i) => {
         const n = i + 1;
         const active = step === n;
         const done = step > n;
         return (
-          <button
-            key={n}
-            onClick={() => n < step && setStep(n)}
-            style={{
-              flex: 1, padding: "10px 4px", background: "none", border: "none", borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
-              color: active ? "var(--accent)" : done ? "var(--text-dim)" : "#50545e",
-              fontSize: 11, cursor: n < step ? "pointer" : "default", letterSpacing: "0.05em",
-            }}
-          >
+          <button key={n} onClick={() => n < step && setStep(n)} style={{
+            flex: 1, padding: "10px 4px", background: "none", border: "none",
+            borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+            color: active ? "var(--accent)" : done ? "var(--text-dim)" : "#50545e",
+            fontSize: 11, cursor: n < step ? "pointer" : "default", letterSpacing: "0.05em",
+          }}>
             <span style={{ marginRight: 4, fontSize: 9 }}>{done ? "✓" : n}</span>{s}
           </button>
         );
@@ -188,35 +224,27 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
     </div>
   );
 
-  /* ─── STEP 1: SETUP ─── */
+  /* ─── Step 1: Setup ─── */
 
   const renderStep1 = () => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-      {/* Item select */}
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <CardTitle style={{ marginBottom: 0 }}>アイテム選択</CardTitle>
           {onNavToStock && item && (
-            <button
-              onClick={() => onNavToStock(item.id)}
-              style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", padding: "4px 10px", cursor: "pointer" }}
-            >
-              ◉ ストックを編集
-            </button>
+            <button onClick={() => onNavToStock(item.id)} style={{
+              fontSize: 11, color: "var(--accent)", background: "none",
+              border: "1px solid var(--accent)", padding: "4px 10px", cursor: "pointer",
+            }}>◉ ストックを編集</button>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 300, overflowY: "auto" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
           {items.map((it) => (
-            <div
-              key={it.id}
-              onClick={() => setSelectedItemId(it.id)}
-              style={{
-                padding: "10px 12px", cursor: "pointer",
-                background: selectedItemId === it.id ? "rgba(255,107,0,0.1)" : "var(--bg2)",
-                border: `1px solid ${selectedItemId === it.id ? "var(--accent)" : "var(--border)"}`,
-                borderRadius: 4,
-              }}
-            >
+            <div key={it.id} onClick={() => setSelectedItemId(it.id)} style={{
+              padding: "10px 12px", cursor: "pointer", borderRadius: 4,
+              background: selectedItemId === it.id ? "rgba(255,107,0,0.1)" : "var(--bg2)",
+              border: `1px solid ${selectedItemId === it.id ? "var(--accent)" : "var(--border)"}`,
+            }}>
               <div style={{ fontSize: 12, color: selectedItemId === it.id ? "var(--text)" : "var(--text-dim)" }}>
                 No.{it.no}　{it.label}
               </div>
@@ -224,42 +252,13 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
             </div>
           ))}
         </div>
-      </Card>
 
-      {/* Template + Format */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Card>
-          <CardTitle>テンプレート</CardTitle>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {TEMPLATES.map((t) => (
-              <OptionCard
-                key={t.id}
-                text={t.label}
-                dim={t.desc}
-                selected={selectedTemplate?.id === t.id}
-                onClick={() => { setSelectedTemplate(t); setSelectedFormat(t.format); }}
-              />
-            ))}
-          </div>
-        </Card>
-        <Card>
-          <CardTitle>投稿フォーマット</CardTitle>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-            {FORMATS.map((f) => (
-              <OptionCard
-                key={f.id}
-                text={`${f.icon} ${f.label}`}
-                dim={f.desc}
-                selected={selectedFormat === f.id}
-                onClick={() => setSelectedFormat(f.id)}
-              />
-            ))}
-          </div>
-        </Card>
         {/* Stock preview */}
         {item?.stock && (
-          <Card style={{ background: "var(--bg3)", border: "1px solid var(--border)", marginTop: 4 }}>
-            <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>ストックデータ（{item.label}）</div>
+          <div style={{ marginTop: 12, background: "var(--bg3)", border: "1px solid var(--border)", padding: "10px 12px" }}>
+            <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>
+              ストックデータ — {["situation","hook","reveal","change","good","ng1","ng2","conclusion"].filter(k => item.stock[k]?.trim()).length}/8 入力済み
+            </div>
             {[
               { key: "situation", label: "状況" },
               { key: "hook",      label: "フック" },
@@ -272,176 +271,254 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
                 </div>
               </div>
             ))}
-          </Card>
+          </div>
         )}
+      </Card>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <Card>
+          <CardTitle>テンプレート</CardTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {TEMPLATES.map((t) => (
+              <OptionCard key={t.id} text={t.label} dim={t.desc}
+                selected={selectedTemplate?.id === t.id}
+                onClick={() => { setSelectedTemplate(t); setSelectedFormat(t.format); }}
+              />
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <CardTitle>投稿フォーマット</CardTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            {FORMATS.map((f) => (
+              <OptionCard key={f.id} text={`${f.icon} ${f.label}`} dim={f.desc}
+                selected={selectedFormat === f.id} onClick={() => setSelectedFormat(f.id)}
+              />
+            ))}
+          </div>
+        </Card>
         <Btn onClick={doResearch} style={{ alignSelf: "flex-end" }}>マーケット調査 → テーマ生成 ▶</Btn>
       </div>
     </div>
   );
 
-  /* ─── STEP 2: THEMES + MARKET ─── */
+  /* ─── Step 2: Themes + Market ─── */
 
   const renderStep2 = () => (
     <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
       <Card>
         <CardTitle>投稿テーマ提案（{themes.length}件）</CardTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 500, overflowY: "auto" }}>
-          {themes.map((t, i) => (
-            <div
-              key={i}
-              onClick={() => setSelectedTheme(t)}
-              style={{
-                padding: "10px 12px", cursor: "pointer", borderRadius: 4,
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 500, overflowY: "auto" }}>
+          {themes.map((t, i) => {
+            const fromStock = i < (item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0);
+            return (
+              <div key={i} onClick={() => setSelectedTheme(t)} style={{
+                padding: "9px 12px", cursor: "pointer", borderRadius: 4,
                 background: selectedTheme === t ? "rgba(255,107,0,0.1)" : "var(--bg2)",
                 border: `1px solid ${selectedTheme === t ? "var(--accent)" : "var(--border)"}`,
-                fontSize: 12, color: selectedTheme === t ? "var(--text)" : "var(--text-dim)", lineHeight: 1.5,
-              }}
-            >
-              {t}
-            </div>
-          ))}
+                display: "flex", gap: 8, alignItems: "flex-start",
+              }}>
+                {fromStock && <span style={{ fontSize: 9, color: "var(--accent)", whiteSpace: "nowrap", marginTop: 2, letterSpacing: "0.05em" }}>ストック</span>}
+                <span style={{ fontSize: 12, color: selectedTheme === t ? "var(--text)" : "var(--text-dim)", lineHeight: 1.5 }}>{t}</span>
+              </div>
+            );
+          })}
         </div>
         <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
           <Btn onClick={doHooks}>フック提案へ ▶</Btn>
         </div>
       </Card>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {market && (
-          <Card>
-            <CardTitle>マーケットリサーチ</CardTitle>
-            <SectionLabel>よくある悩み</SectionLabel>
-            {market.problems.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-            <div style={{ marginTop: 10 }} />
-            <SectionLabel>バズる切り口</SectionLabel>
-            {(market.viral || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-            <div style={{ marginTop: 10 }} />
-            <SectionLabel>購買動機</SectionLabel>
-            {market.buyReasons.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-          </Card>
-        )}
-      </div>
+      {market && (
+        <Card>
+          <CardTitle>マーケットリサーチ</CardTitle>
+          <SectionLabel>よくある悩み</SectionLabel>
+          {market.problems.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
+          <div style={{ marginTop: 10 }} />
+          <SectionLabel>バズる切り口</SectionLabel>
+          {(market.viral || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
+          <div style={{ marginTop: 10 }} />
+          <SectionLabel>購買動機</SectionLabel>
+          {market.buyReasons.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
+        </Card>
+      )}
     </div>
   );
 
-  /* ─── STEP 3: HOOKS ─── */
+  /* ─── Step 3: Hooks ─── */
 
   const TYPE_COLOR = { 逆張り: "orange", 体験: "blue", 共感: "green", チェック: "gray", NG: "gray" };
 
   const renderStep3 = () => (
     <Card>
       <CardTitle>フック提案（{hooks.length}件）— クリックで採用</CardTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxHeight: 520, overflowY: "auto" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxHeight: 500, overflowY: "auto" }}>
         {hooks.map((h, i) => (
-          <div
-            key={i}
-            onClick={() => setSelectedHook(h)}
-            style={{
-              padding: "12px", cursor: "pointer", borderRadius: 4,
-              background: selectedHook === h ? "rgba(255,107,0,0.1)" : "var(--bg2)",
-              border: `1px solid ${selectedHook === h ? "var(--accent)" : "var(--border)"}`,
-            }}
-          >
+          <div key={i} onClick={() => setSelectedHook(h)} style={{
+            padding: "12px", cursor: "pointer", borderRadius: 4,
+            background: selectedHook === h ? "rgba(255,107,0,0.1)" : "var(--bg2)",
+            border: `1px solid ${selectedHook === h ? "var(--accent)" : "var(--border)"}`,
+          }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
               <Tag color={TYPE_COLOR[h.type] ?? "gray"}>{h.type}</Tag>
-              {selectedHook === h && <span style={{ fontSize: 10, color: "var(--accent)" }}>採用中</span>}
+              {h.fromStock && <span style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.05em" }}>ストック</span>}
+              {selectedHook === h && <span style={{ fontSize: 9, color: "var(--accent)" }}>採用中</span>}
             </div>
             <div style={{ fontSize: 12, color: selectedHook === h ? "var(--text)" : "var(--text-dim)", lineHeight: 1.6 }}>{h.text}</div>
           </div>
         ))}
       </div>
       <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        {selectedHook && <div style={{ fontSize: 11, color: "var(--text-dim)", alignSelf: "center" }}>採用: 「{selectedHook.text.slice(0, 30)}…」</div>}
+        {selectedHook && <div style={{ fontSize: 11, color: "var(--text-dim)", alignSelf: "center" }}>採用: 「{selectedHook.text.slice(0, 28)}…」</div>}
         <Btn onClick={() => doBuild()} disabled={!selectedHook}>スライド構築へ ▶</Btn>
       </div>
     </Card>
   );
 
-  /* ─── STEP 4: SLIDES ─── */
+  /* ─── Step 4: Slides + Script + Analysis ─── */
 
   const renderStep4 = () => (
     <div>
-      {/* Regen modes */}
-      <Card style={{ marginBottom: 12 }}>
-        <CardTitle>再生成モード</CardTitle>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {/* Top bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8 }}>
           {REGEN_MODES.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => doRegen(m)}
-              style={{
-                padding: "6px 12px", background: regenMode === m.id ? "rgba(255,107,0,0.15)" : "var(--bg2)",
-                border: `1px solid ${regenMode === m.id ? "var(--accent)" : "var(--border)"}`,
-                color: regenMode === m.id ? "var(--accent)" : "var(--text-dim)",
-                fontSize: 11, cursor: "pointer", borderRadius: 3,
-              }}
-            >
-              {m.label}
-              <span style={{ fontSize: 9, color: "var(--text-dim)", marginLeft: 4 }}>{m.desc}</span>
-            </button>
+            <button key={m.id} onClick={() => doRegen(m)} style={{
+              padding: "5px 10px", background: regenMode === m.id ? "rgba(255,107,0,0.15)" : "var(--bg2)",
+              border: `1px solid ${regenMode === m.id ? "var(--accent)" : "var(--border)"}`,
+              color: regenMode === m.id ? "var(--accent)" : "var(--text-dim)",
+              fontSize: 10, cursor: "pointer",
+            }}>{m.label}</button>
           ))}
         </div>
-      </Card>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setScriptView(v => !v)} style={{
+            padding: "5px 12px", background: scriptView ? "rgba(255,107,0,0.15)" : "var(--bg2)",
+            border: `1px solid ${scriptView ? "var(--accent)" : "var(--border)"}`,
+            color: scriptView ? "var(--accent)" : "var(--text-dim)", fontSize: 11, cursor: "pointer",
+          }}>
+            {scriptView ? "▣ スライド表示" : "≡ 台本表示"}
+          </button>
+          <button onClick={() => copyText(buildFullScript())} style={{
+            padding: "5px 12px", background: "var(--bg2)", border: "1px solid var(--border)",
+            color: "var(--text-dim)", fontSize: 11, cursor: "pointer",
+          }}>全コピー</button>
+        </div>
+      </div>
 
-      {/* Slides */}
-      {slides.map((s, si) => (
-        <Card key={si} style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <CardTitle style={{ marginBottom: 0 }}>スライド {si + 1} — {s.slide}</CardTitle>
-            <button
-              onClick={() => copyText(s.options[s.selected])}
-              style={{ fontSize: 10, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "3px 8px", cursor: "pointer" }}
-            >
-              コピー
-            </button>
+      {/* Script view */}
+      {scriptView ? (
+        <Card style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <CardTitle style={{ marginBottom: 0 }}>台本</CardTitle>
+            <button onClick={() => copyText(buildFullScript())} style={{
+              fontSize: 10, color: "var(--text-dim)", background: "none",
+              border: "1px solid var(--border)", padding: "3px 8px", cursor: "pointer",
+            }}>コピー</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            {s.options.map((opt, oi) => (
-              <OptionCard
-                key={oi}
-                text={opt}
-                label={`案 ${oi + 1}`}
-                selected={s.selected === oi}
-                onClick={() => selectSlideOption(si, oi)}
-              />
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {slides.map((s, si) => {
+              const opt = s.options[s.selected];
+              const isHook = opt && opt.sub !== undefined;
+              return (
+                <div key={si} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 12 }}>
+                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>
+                    スライド {si + 1} — {s.role}
+                  </div>
+                  {isHook ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>サブ: <span style={{ color: "var(--text)", fontSize: 12 }}>{opt.sub}</span></div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>メイン: <span style={{ color: "var(--text)", fontSize: 16, fontWeight: 700 }}>{opt.main}</span></div>
+                      {opt.note && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>補足: <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{opt.note}</span></div>}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{opt?.text || ""}</div>
+                  )}
+                </div>
+              );
+            })}
+
+            {captions.length > 0 && (
+              <div style={{ borderLeft: "2px solid var(--border)", paddingLeft: 12, borderColor: "var(--accent)" }}>
+                <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>キャプション</div>
+                <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{captions[selectedCaption]}</div>
+              </div>
+            )}
+
+            {hashtags && (
+              <div style={{ borderLeft: "2px solid var(--border)", paddingLeft: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>ハッシュタグ</div>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>{hashtags}</div>
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Slide cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            {slides.map((s, si) => (
+              <Card key={si} style={{ padding: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.08em" }}>
+                    S{si + 1} — {s.role}
+                  </div>
+                  <button onClick={() => copyText(optToText(s.options[s.selected]))} style={{
+                    fontSize: 9, color: "var(--text-dim)", background: "none",
+                    border: "1px solid var(--border)", padding: "2px 6px", cursor: "pointer",
+                  }}>コピー</button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  {s.options.map((opt, oi) => (
+                    <SlideOptionCard key={oi} opt={opt} label={`案 ${oi + 1}`}
+                      selected={s.selected === oi} onClick={() => selectSlideOption(si, oi)} />
+                  ))}
+                </div>
+              </Card>
             ))}
           </div>
-        </Card>
-      ))}
 
-      {/* Caption */}
-      {captions.length > 0 && (
-        <Card style={{ marginBottom: 12 }}>
-          <CardTitle>キャプション</CardTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {captions.map((c, i) => (
-              <OptionCard key={i} text={c} label={`案 ${i + 1}`} selected={selectedCaption === i} onClick={() => setSelectedCaption(i)} />
-            ))}
-          </div>
-        </Card>
+          {/* Caption */}
+          {captions.length > 0 && (
+            <Card style={{ marginBottom: 12 }}>
+              <CardTitle>キャプション</CardTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {captions.map((c, i) => (
+                  <div key={i} onClick={() => setSelectedCaption(i)} style={{
+                    padding: "10px 12px", cursor: "pointer", borderRadius: 4,
+                    background: selectedCaption === i ? "rgba(255,107,0,0.12)" : "var(--bg2)",
+                    border: `1px solid ${selectedCaption === i ? "var(--accent)" : "var(--border)"}`,
+                    fontSize: 11, color: selectedCaption === i ? "var(--text)" : "var(--text-dim)",
+                    lineHeight: 1.7, whiteSpace: "pre-wrap",
+                  }}>{c}</div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* Hashtags */}
+          {hashtags && (
+            <Card style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <CardTitle style={{ marginBottom: 0 }}>ハッシュタグ</CardTitle>
+                <button onClick={() => copyText(hashtags)} style={{ fontSize: 10, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "3px 8px", cursor: "pointer" }}>コピー</button>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>{hashtags}</div>
+            </Card>
+          )}
+        </>
       )}
 
-      {/* Hashtags */}
-      {hashtags && (
-        <Card style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <CardTitle style={{ marginBottom: 0 }}>ハッシュタグ</CardTitle>
-            <button onClick={() => copyText(hashtags)} style={{ fontSize: 10, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "3px 8px", cursor: "pointer" }}>コピー</button>
-          </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>{hashtags}</div>
-        </Card>
-      )}
-
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-        <Btn onClick={() => copyText(buildFullScript())}>全スクリプトをコピー</Btn>
-        <Btn onClick={doScore}>品質スコアを算出</Btn>
+      {/* Action buttons */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <Btn onClick={doScore}>品質スコア</Btn>
+        <Btn onClick={doSNS}>SNSマーケ分析</Btn>
         <Btn onClick={() => setStep(5)}>投稿後分析へ ▶</Btn>
       </div>
 
       {/* Quality score */}
       {quality && (
-        <Card style={{ borderLeft: `3px solid ${quality.total >= 80 ? "var(--accent)" : quality.total >= 60 ? "#6fa8dc" : "var(--border)"}` }}>
+        <Card style={{ marginBottom: 12, borderLeft: `3px solid ${quality.total >= 80 ? "var(--accent)" : quality.total >= 60 ? "#6fa8dc" : "var(--border)"}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
             <CardTitle>品質スコア</CardTitle>
             <div style={{ fontSize: 28, fontWeight: 700, color: quality.total >= 80 ? "var(--accent)" : quality.total >= 60 ? "#6fa8dc" : "var(--text-dim)" }}>
@@ -454,14 +531,49 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           <ScoreDim label="断定力" score={quality.breakdown.assertion} />
           <ScoreDim label="UpGear思想" score={quality.breakdown.philosophy} />
           <ScoreDim label="CTA力" score={quality.breakdown.cta} />
-          {quality.aiPenalty > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11, color: "#e06c75" }}>AI文体ペナルティ: -{quality.aiPenalty}点</div>
-          )}
+          {quality.aiPenalty > 0 && <div style={{ marginTop: 8, fontSize: 11, color: "#e06c75" }}>AI文体ペナルティ: -{quality.aiPenalty}点</div>}
           {quality.improvements.length > 0 && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 10 }}>
               <SectionLabel color="#6fa8dc">改善提案</SectionLabel>
-              {quality.improvements.map((imp, i) => (
-                <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>→ {imp}</div>
+              {quality.improvements.map((imp, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>→ {imp}</div>)}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* SNS Analysis */}
+      {snsAnalysis && (
+        <Card style={{ borderLeft: `3px solid ${snsAnalysis.total >= 70 ? "var(--accent)" : "#6fa8dc"}` }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+            <div>
+              <CardTitle style={{ marginBottom: 4 }}>SNSマーケ分析</CardTitle>
+              <div style={{ display: "flex", gap: 10 }}>
+                <Tag color="orange">{snsAnalysis.postType}</Tag>
+                <span style={{ fontSize: 11, color: "var(--text-dim)" }}>当事者: {snsAnalysis.audienceLabel}</span>
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 28, fontWeight: 700, color: snsAnalysis.total >= 70 ? "var(--accent)" : "#6fa8dc" }}>
+                {snsAnalysis.total}<span style={{ fontSize: 12, fontWeight: 400 }}>/100</span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 2 }}>推定: {snsAnalysis.reachRange}</div>
+            </div>
+          </div>
+
+          <ScoreDim label="当事者の広さ" score={snsAnalysis.breakdown.audience} max={30} />
+          <ScoreDim label="バズ型フック" score={snsAnalysis.breakdown.buzz} max={25} />
+          <ScoreDim label="保存されやすさ" score={snsAnalysis.breakdown.saves} max={20} />
+          <ScoreDim label="TikTok適合度" score={snsAnalysis.breakdown.tiktok} max={15} />
+          <ScoreDim label="ストック充実度" score={snsAnalysis.breakdown.stock} max={10} />
+
+          {snsAnalysis.issues.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <SectionLabel color="#6fa8dc">改善ポイント</SectionLabel>
+              {snsAnalysis.issues.map((iss, i) => (
+                <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 10, color: "var(--accent)", marginBottom: 3 }}>▶ {iss.dim}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>{iss.tip}</div>
+                </div>
               ))}
             </div>
           )}
@@ -470,7 +582,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
     </div>
   );
 
-  /* ─── STEP 5: ANALYTICS ─── */
+  /* ─── Step 5: Post analytics ─── */
 
   const renderStep5 = () => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -486,26 +598,12 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           ].map(({ key, label }) => (
             <div key={key} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontSize: 11, color: "var(--text-dim)", width: 80 }}>{label}</div>
-              <input
-                type="number"
-                value={analytics[key]}
+              <input type="number" value={analytics[key]}
                 onChange={(e) => setAnalytics((a) => ({ ...a, [key]: e.target.value }))}
-                style={{
-                  flex: 1, background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)",
-                  padding: "6px 10px", fontSize: 12, outline: "none",
-                }}
+                style={{ flex: 1, background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)", padding: "6px 10px", fontSize: 12, outline: "none" }}
               />
             </div>
           ))}
-          <div style={{ marginTop: 4 }}>
-            <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 6 }}>使用したフック</div>
-            <Textarea
-              value={analytics.hook || selectedHook?.text || ""}
-              onChange={(e) => setAnalytics((a) => ({ ...a, hook: e.target.value }))}
-              rows={3}
-              style={{ width: "100%", fontSize: 11 }}
-            />
-          </div>
           <Btn onClick={doAnalyze}>AI分析を実行</Btn>
         </div>
       </Card>
@@ -513,28 +611,24 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
       {perfResult && (
         <Card>
           <CardTitle>AI解析レポート</CardTitle>
-          <div style={{ display: "flex", gap: 16, marginBottom: 14 }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: "var(--text-dim)" }}>いいね率</div>
-              <div style={{ fontSize: 20, color: perfResult.likeRate >= 3 ? "var(--accent)" : "var(--text)" }}>{perfResult.likeRate}%</div>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: "var(--text-dim)" }}>保存率</div>
-              <div style={{ fontSize: 20, color: perfResult.saveRate >= 2 ? "var(--accent)" : "var(--text)" }}>{perfResult.saveRate}%</div>
-            </div>
+          <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
+            {[
+              { label: "いいね率", val: `${perfResult.likeRate}%`, hi: perfResult.likeRate >= 3 },
+              { label: "保存率",   val: `${perfResult.saveRate}%`, hi: perfResult.saveRate >= 2 },
+            ].map(({ label, val, hi }) => (
+              <div key={label} style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{label}</div>
+                <div style={{ fontSize: 22, color: hi ? "var(--accent)" : "var(--text)" }}>{val}</div>
+              </div>
+            ))}
           </div>
-
           <SectionLabel>うまくいった理由</SectionLabel>
           {perfResult.reasons.map((r, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>✓ {r}</div>)}
-
-          {perfResult.improvements.length > 0 && (
-            <>
-              <div style={{ marginTop: 10 }} />
-              <SectionLabel color="#6fa8dc">改善ポイント</SectionLabel>
-              {perfResult.improvements.map((r, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>→ {r}</div>)}
-            </>
-          )}
-
+          {perfResult.improvements.length > 0 && <>
+            <div style={{ marginTop: 10 }} />
+            <SectionLabel color="#6fa8dc">改善ポイント</SectionLabel>
+            {perfResult.improvements.map((r, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>→ {r}</div>)}
+          </>}
           <div style={{ marginTop: 10 }} />
           <SectionLabel color="#98c379">次回の仮説</SectionLabel>
           {perfResult.nextTips.map((r, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>▶ {r}</div>)}
@@ -543,13 +637,13 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
     </div>
   );
 
-  /* ─── RENDER ─── */
+  /* ─── Render ─── */
 
   return (
     <div>
       <PageHeader
         title="コンテンツ制作スタジオ"
-        sub={`UpGear v4.6 — AIコンテンツ制作システム / アイテム: ${item?.label ?? "—"}`}
+        sub={`UpGear v4.6 — ${item?.label ?? "—"} / ストック ${item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0}/8`}
       />
       {stepBar}
       {step === 1 && renderStep1()}
