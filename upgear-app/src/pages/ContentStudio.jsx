@@ -112,11 +112,12 @@ export default function ContentStudio({ data }) {
   }, [item]);
 
   const doBuild = useCallback((hookOverride) => {
-    const h = hookOverride ?? selectedHook ?? (hooks[0] ?? { text: "" });
+    const hObj = hookOverride ?? selectedHook ?? (hooks[0] ?? { text: "" });
+    const h = hObj.text ?? hObj;
     const fmt = selectedFormat ?? FORMATS[0].id;
     const mode = regenMode;
     const ss = generateAllSlides(item, h, fmt, mode);
-    const caps = generateCaption(item, h);
+    const caps = generateCaption(item, hObj);
     const tags = generateHashtags(item);
     setSlides(ss.map((s) => ({ ...s, selected: 0 })));
     setCaptions(caps);
@@ -126,8 +127,8 @@ export default function ContentStudio({ data }) {
   }, [item, selectedHook, selectedFormat, regenMode, hooks]);
 
   const doScore = useCallback(() => {
-    const selectedSlides = slides.map((s) => s.options[s.selected]);
-    const q = scoreQuality(selectedSlides, selectedHook?.text ?? "");
+    const selected = slides.map((s) => s.options[s.selected]);
+    const q = scoreQuality(selected, selectedHook?.text ?? "");
     setQuality(q);
   }, [slides, selectedHook]);
 
@@ -142,7 +143,8 @@ export default function ContentStudio({ data }) {
 
   const doRegen = (mode) => {
     setRegenMode(mode.id);
-    const h = selectedHook ?? (hooks[0] ?? { text: "" });
+    const hObj = selectedHook ?? (hooks[0] ?? { text: "" });
+    const h = hObj.text ?? hObj;
     const fmt = selectedFormat ?? FORMATS[0].id;
     const ss = generateAllSlides(item, h, fmt, mode.id);
     setSlides(ss.map((s) => ({ ...s, selected: 0 })));
@@ -283,7 +285,7 @@ export default function ContentStudio({ data }) {
             {market.problems.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
             <div style={{ marginTop: 10 }} />
             <SectionLabel>バズる切り口</SectionLabel>
-            {market.viralCuts.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
+            {(market.viral || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
             <div style={{ marginTop: 10 }} />
             <SectionLabel>購買動機</SectionLabel>
             {market.buyReasons.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
@@ -417,8 +419,8 @@ export default function ContentStudio({ data }) {
               {quality.total}<span style={{ fontSize: 14, fontWeight: 400 }}>/100</span>
             </div>
           </div>
+          <ScoreDim label="口語の自然さ" score={quality.breakdown.colloquial} />
           <ScoreDim label="フック強度" score={quality.breakdown.hook} />
-          <ScoreDim label="口語度" score={quality.breakdown.colloquial} />
           <ScoreDim label="体験密度" score={quality.breakdown.experience} />
           <ScoreDim label="断定力" score={quality.breakdown.assertion} />
           <ScoreDim label="UpGear思想" score={quality.breakdown.philosophy} />

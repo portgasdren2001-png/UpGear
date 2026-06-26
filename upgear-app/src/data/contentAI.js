@@ -238,9 +238,10 @@ export function generateCaption(item, hook) {
   const s = item.stock || {};
   const cat = getCatWord(item);
   const conc = s.conclusion || `${cat}で迷いたくない人だけ買え`;
+  const hookText = (hook && typeof hook === "object") ? (hook.text || "") : (hook || "");
 
   return [
-    `${hook}\n\n${conc}\n\nプロフィールのリンクから詳細をチェック`,
+    `${hookText}\n\n${conc}\n\nプロフィールのリンクから詳細をチェック`,
     `${(s.situation || "").slice(0, 30) || "毎日使うものだから"}\nだから${getNick(item)}を選んだ\n\n向いてない人→${(s.ng1 || "こだわりが強い人").slice(0, 20)}\n\n保存して次の投稿も見て`,
     `正直に言う。${getNick(item)}は${item.score}点。\n\n${(s.good || "使って初めて分かる良さがある").slice(0, 40)}\n\n${conc}`,
   ];
@@ -260,65 +261,59 @@ export function generateHashtags(item) {
 
 export function scoreQuality(slides, hook) {
   const texts = slides.map(s => {
-    const opt = s.options[s.selected || 0];
-    if (!opt) return "";
-    return opt.text || `${opt.sub || ""} ${opt.main || ""} ${opt.note || ""}`;
+    if (!s) return "";
+    if (typeof s === "string") return s;
+    return s.text || `${s.sub || ""} ${s.main || ""} ${s.note || ""}`;
   });
   const allText = [hook, ...texts].join(" ");
 
-  // 口語の自然さ (25点)
+  // 口語の自然さ /20
   const formal = ["です。", "ます。", "ございます", "いたします", "非常に", "大変", "しかしながら", "また、", "さらに、", "それに加え"];
   const formalHits = formal.filter(w => allText.includes(w)).length;
-  const colloquial = Math.max(0, 25 - formalHits * 4);
+  const colloquial = Math.max(0, 20 - formalHits * 4);
 
-  // フックの強さ (20点)
-  const hookScore = (
-    (hook.includes("俺") ? 5 : 0) +
-    ((hook.includes("か") || hook.includes("？")) ? 5 : 0) +
-    (hook.length < 30 ? 5 : 2) +
-    (hook.split(/[\s　]/).length >= 2 ? 5 : 0)
+  // フック強度 /20
+  const h = hook || "";
+  const hookScore = Math.min(20,
+    (h.includes("俺") ? 5 : 0) +
+    ((h.includes("か") || h.includes("？")) ? 5 : 0) +
+    (h.length > 4 && h.length < 30 ? 5 : 2) +
+    (h.split(/[\s　]/).length >= 2 ? 5 : 0)
   );
 
-  // UpGearらしさ (20点)
-  const upgearWords = ["だけ買え", "向いていない", "俺", "確認", "判断", "迷わ", "装備", "認定"];
-  const upgear = Math.min(20, upgearWords.filter(w => allText.includes(w)).length * 4);
+  // 体験密度 /20
+  const expWords = ["気づいた", "後悔", "正直", "変わった", "戻れない", "手放せない", "使って", "体感", "気づき", "before"];
+  const experience = Math.min(20, expWords.filter(w => allText.includes(w)).length * 4);
 
-  // 感情量 (15点)
-  const emotionWords = ["気づいた", "後悔", "正直", "変わった", "戻れない", "損", "驚", "まじ", "マジ", "手放せない"];
-  const emotion = Math.min(15, emotionWords.filter(w => allText.includes(w)).length * 3);
+  // 断定力 /20
+  const upgearWords = ["だけ買え", "向いていない", "俺", "確認", "迷わ", "装備", "認定", "答えは決まって"];
+  const assertion = Math.min(20, upgearWords.filter(w => allText.includes(w)).length * 4);
 
-  // 保存されやすさ (10点)
-  const saveWords = ["確認", "チェック", "前に", "保存", "リスト", "知りたかった"];
-  const saves = Math.min(10, saveWords.filter(w => allText.includes(w)).length * 3);
+  // UpGear思想 /10
+  const philWords = ["SD", "判断", "Silent", "装備", "認定", "フィルタ"];
+  const philosophy = Math.min(10, philWords.filter(w => allText.includes(w)).length * 4);
 
-  // 読みやすさ (10点)
-  const avgLen = texts.reduce((a, t) => a + t.length, 0) / (texts.length || 1);
-  const readability = (avgLen > 15 && avgLen < 90) ? 10 : (avgLen < 15 ? 5 : 7);
+  // CTA力 /10
+  const ctaWords = ["保存", "プロフィール", "次の投稿", "確認", "チェック", "リスト"];
+  const cta = Math.min(10, ctaWords.filter(w => allText.includes(w)).length * 3);
 
   // AIっぽさペナルティ
   const aiWords = ["この商品は", "非常に便利", "購入しました", "満足しています", "おすすめです", "是非ご検討"];
   const aiPenalty = aiWords.filter(w => allText.includes(w)).length * 5;
 
-  const total = Math.max(0, Math.min(100, colloquial + hookScore + upgear + emotion + saves + readability - aiPenalty));
+  const total = Math.max(0, Math.min(100, colloquial + hookScore + experience + assertion + philosophy + cta - aiPenalty));
 
   const improvements = [];
-  if (colloquial < 18) improvements.push("「です」「ます」を減らして口語にしましょう");
+  if (colloquial < 14) improvements.push("「です」「ます」を減らして口語にしましょう");
   if (hookScore < 12)  improvements.push("フックに「俺」を入れて一人称にしましょう");
-  if (upgear < 12)     improvements.push("「〇〇の人だけ買え」の断定結論を明確にしましょう");
-  if (emotion < 8)     improvements.push("「気づいた」「後悔」など感情ワードを追加しましょう");
-  if (saves < 6)       improvements.push("「確認」「保存」など保存動機ワードを入れましょう");
+  if (assertion < 12)  improvements.push("「〇〇の人だけ買え」の断定結論を明確にしましょう");
+  if (experience < 10) improvements.push("「気づいた」「後悔」など体験ワードを追加しましょう");
+  if (cta < 5)         improvements.push("「確認」「保存」などCTAワードを入れましょう");
   if (aiPenalty > 0)   improvements.push("AI特有の固い表現を口語に言い換えましょう");
 
   return {
     total,
-    breakdown: {
-      "口語の自然さ":       { score: colloquial,  max: 25 },
-      "フックの強さ":       { score: hookScore,   max: 20 },
-      "UpGearらしさ":       { score: upgear,      max: 20 },
-      "感情量":             { score: emotion,      max: 15 },
-      "保存されやすさ":     { score: saves,        max: 10 },
-      "読みやすさ":         { score: readability,  max: 10 },
-    },
+    breakdown: { colloquial, hook: hookScore, experience, assertion, philosophy, cta },
     aiPenalty,
     improvements,
   };
