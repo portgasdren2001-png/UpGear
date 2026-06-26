@@ -1,12 +1,12 @@
 :root {
-  --bg: #0a0a0a;
-  --bg2: #0d0d0d;
-  --bg3: #111111;
-  --border: #1e1e1e;
-  --text: #e8e8e8;
-  --text-dim: #666;
+  --bg: #141414;
+  --bg2: #1a1a1a;
+  --bg3: #202020;
+  --border: #2e2e2e;
+  --text: #f0f0f0;
+  --text-dim: #909090;
   --accent: #FF6B00;
-  --accent-dim: rgba(255, 107, 0, 0.15);
+  --accent-dim: rgba(255, 107, 0, 0.18);
   --sidebar-w: 200px;
   --sidebar-w-collapsed: 56px;
   --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
@@ -93,7 +93,7 @@ nav {
 
 .nav-item:hover {
   color: var(--text);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.06);
 }
 
 .nav-item.active {
