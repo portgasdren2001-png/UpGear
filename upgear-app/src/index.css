@@ -1,8 +1,8 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: #2c2c2c;
-  color: #f2f0ed;
+  background: #252830;
+  color: #e8eaf0;
   font-family: "SF Mono", "Fira Code", Consolas, monospace;
   -webkit-font-smoothing: antialiased;
 }
@@ -15,10 +15,10 @@ body {
   width: 4px;
   height: 4px;
 }
-::-webkit-scrollbar-track { background: #2c2c2c; }
-::-webkit-scrollbar-thumb { background: #555; }
+::-webkit-scrollbar-track { background: #252830; }
+::-webkit-scrollbar-thumb { background: #50545e; }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button { opacity: 0.4; }
 
-select option { background: #333; color: #f2f0ed; }
+select option { background: #2c2f38; color: #e8eaf0; }
