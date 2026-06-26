@@ -4,7 +4,7 @@ import "./Layout.css";
 const NAV_ITEMS = [
   { id: "dashboard", icon: "◈", label: "ダッシュボード" },
   { id: "stock",     icon: "◉", label: "ストック" },
-  { id: "script",    icon: "▣", label: "台本生成" },
+  { id: "script",    icon: "▣", label: "制作スタジオ" },
   { id: "posts",     icon: "◫", label: "投稿データ" },
   { id: "master",    icon: "◎", label: "マスター" },
 ];
