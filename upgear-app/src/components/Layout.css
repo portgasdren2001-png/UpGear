@@ -9,8 +9,8 @@
   --accent-dim: rgba(255, 107, 0, 0.2);
   --sidebar-w: 200px;
   --sidebar-w-collapsed: 56px;
-  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
-  --font-serif: Georgia, "Times New Roman", serif;
+  --font-mono: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", sans-serif;
+  --font-serif: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

@@ -3,7 +3,7 @@
 body {
   background: #252830;
   color: #e8eaf0;
-  font-family: "SF Mono", "Fira Code", Consolas, monospace;
+  font-family: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
