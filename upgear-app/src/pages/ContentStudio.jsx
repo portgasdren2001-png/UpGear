@@ -1,9 +1,6 @@
 import { useState, useCallback } from "react";
 import { PageHeader, Card, CardTitle, Tag, Btn, Textarea } from "../components/ui";
 import {
-  getMarketResearch,
-  generateThemes,
-  generateHooks,
   FORMATS,
   TEMPLATES,
   generateAllSlides,
@@ -14,6 +11,7 @@ import {
   analyzeSNSPotential,
   REGEN_MODES,
 } from "../data/contentAI";
+import { getTopRecommendations } from "../data/marketResearchAI";
 
 /* ─── helpers ─── */
 
@@ -109,7 +107,7 @@ function OptionCard({ text, selected, onClick, dim }) {
 
 /* ─── Main Component ─── */
 
-export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock, onNavToResearch, researchApply, onClearResearch, addLearning }) {
+export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock, onNavToResearch, researchApply, onClearResearch, addLearning, learningData }) {
   const { items } = data;
 
   const [step, setStep] = useState(1);
@@ -118,10 +116,8 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [selectedFormat, setSelectedFormat] = useState(null);
 
-  const [market, setMarket] = useState(null);
-  const [themes, setThemes] = useState([]);
-  const [selectedTheme, setSelectedTheme] = useState(null);
-  const [hooks, setHooks] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
+  const [selectedRec, setSelectedRec] = useState(null);
   const [selectedHook, setSelectedHook] = useState(null);
   const [regenMode, setRegenMode] = useState(null);
   const [slides, setSlides] = useState([]);
@@ -149,20 +145,15 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   /* ─── Actions ─── */
 
   const doResearch = useCallback(() => {
-    setMarket(getMarketResearch(item?.category ?? "GEAR"));
-    setThemes(generateThemes(item));
-    setSelectedTheme(null);
-    setStep(2);
-  }, [item]);
-
-  const doHooks = useCallback(() => {
-    setHooks(generateHooks(item));
+    const recs = getTopRecommendations(item, learningData ?? []);
+    setRecommendations(recs);
+    setSelectedRec(null);
     setSelectedHook(null);
-    setStep(3);
-  }, [item]);
+    setStep(2);
+  }, [item, learningData]);
 
   const doBuild = useCallback((hookOverride) => {
-    const hObj = hookOverride ?? selectedHook ?? (hooks[0] ?? { text: "" });
+    const hObj = hookOverride ?? selectedHook ?? { text: "" };
     const h = typeof hObj === "object" ? (hObj.text ?? "") : hObj;
     const fmt = selectedFormat ?? FORMATS[0].id;
     const ss = generateAllSlides(item, h, fmt, regenMode);
@@ -173,7 +164,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
     setSnsAnalysis(null);
     setScriptView(false);
     setStep(4);
-  }, [item, selectedHook, selectedFormat, regenMode, hooks]);
+  }, [item, selectedHook, selectedFormat, regenMode]);
 
   const doScore = useCallback(() => {
     const sel = slides.map((s) => s.options[s.selected]);
@@ -207,7 +198,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
 
   const doRegen = (mode) => {
     setRegenMode(mode.id);
-    const hObj = selectedHook ?? (hooks[0] ?? { text: "" });
+    const hObj = selectedHook ?? { text: "" };
     const h = typeof hObj === "object" ? (hObj.text ?? "") : hObj;
     const ss = generateAllSlides(item, h, selectedFormat ?? FORMATS[0].id, mode.id);
     setSlides(ss.map((s) => ({ ...s, selected: 0 })));
@@ -325,77 +316,131 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
     </div>
   );
 
-  /* ─── Step 2: Themes + Market ─── */
+  /* ─── Step 2: Archetype Recommendations ─── */
 
   const renderStep2 = () => (
-    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16 }}>
-      <Card>
-        <CardTitle>投稿テーマ提案（{themes.length}件）</CardTitle>
-        <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 500, overflowY: "auto" }}>
-          {themes.map((t, i) => {
-            const fromStock = i < (item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0);
-            return (
-              <div key={i} onClick={() => setSelectedTheme(t)} style={{
-                padding: "9px 12px", cursor: "pointer", borderRadius: 4,
-                background: selectedTheme === t ? "rgba(255,107,0,0.1)" : "var(--bg2)",
-                border: `1px solid ${selectedTheme === t ? "var(--accent)" : "var(--border)"}`,
-                display: "flex", gap: 8, alignItems: "flex-start",
-              }}>
-                {fromStock && <span style={{ fontSize: 9, color: "var(--accent)", whiteSpace: "nowrap", marginTop: 2, letterSpacing: "0.05em" }}>ストック</span>}
-                <span style={{ fontSize: 12, color: selectedTheme === t ? "var(--text)" : "var(--text-dim)", lineHeight: 1.5 }}>{t}</span>
+    <div>
+      <div style={{ marginBottom: 14, fontSize: 11, color: "var(--text-dim)" }}>
+        SNSマーケティングAIが3つのアーキタイプを分析しました。最も効果的なテーマ・フックを選んでください。
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        {recommendations.map((rec, i) => {
+          const isSelected = selectedRec === i;
+          return (
+            <div key={i} style={{
+              background: isSelected ? `${rec.color}18` : "var(--bg2)",
+              border: `2px solid ${isSelected ? rec.color : "var(--border)"}`,
+              borderRadius: 6, padding: 16, cursor: "pointer", transition: "border-color 0.15s, background 0.15s",
+            }} onClick={() => {
+              setSelectedRec(i);
+              setSelectedHook(rec.hook);
+              setSelectedFormat(rec.format);
+            }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{ background: rec.color, color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", letterSpacing: "0.08em" }}>
+                  {rec.archetype}
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{rec.archetypeDesc}</div>
+                {isSelected && <div style={{ marginLeft: "auto", fontSize: 10, color: rec.color }}>選択中 ✓</div>}
               </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
-          <Btn onClick={doHooks}>フック提案へ ▶</Btn>
-        </div>
-      </Card>
 
-      {market && (
-        <Card>
-          <CardTitle>マーケットリサーチ</CardTitle>
-          <SectionLabel>よくある悩み</SectionLabel>
-          {market.problems.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-          <div style={{ marginTop: 10 }} />
-          <SectionLabel>バズる切り口</SectionLabel>
-          {(market.viral || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-          <div style={{ marginTop: 10 }} />
-          <SectionLabel>購買動機</SectionLabel>
-          {market.buyReasons.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-        </Card>
+              {/* Theme */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 9, color: rec.color, letterSpacing: "0.1em", marginBottom: 4 }}>テーマ</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", lineHeight: 1.5 }}>{rec.theme.text}</div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.5 }}>{rec.theme.reason}</div>
+              </div>
+
+              {/* Hook */}
+              <div style={{ marginBottom: 10, padding: "10px", background: "var(--bg3)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 9, color: rec.color, letterSpacing: "0.1em", marginBottom: 4 }}>フック — {rec.hook.type}型</div>
+                <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.6 }}>「{rec.hook.text}」</div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, lineHeight: 1.4 }}>{rec.hook.reason}</div>
+              </div>
+
+              {/* SNS basis */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 6 }}>SNSマーケ根拠</div>
+                {rec.snsBasis.map((b, bi) => (
+                  <div key={bi} style={{ fontSize: 10, color: "var(--text-dim)", padding: "3px 0", paddingLeft: 8, borderLeft: `2px solid ${rec.color}`, marginBottom: 4, lineHeight: 1.5 }}>
+                    {b}
+                  </div>
+                ))}
+              </div>
+
+              {/* Metrics */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                {[rec.expectedReach, rec.expectedFollow, rec.expectedSave].map((m, mi) => (
+                  <div key={mi} style={{ fontSize: 9, color: rec.color, border: `1px solid ${rec.color}`, padding: "2px 6px" }}>{m}</div>
+                ))}
+              </div>
+
+              <Btn onClick={(e) => {
+                e.stopPropagation();
+                setSelectedRec(i);
+                setSelectedHook(rec.hook);
+                setSelectedFormat(rec.format);
+                doBuild(rec.hook);
+              }} style={{ width: "100%", textAlign: "center", background: isSelected ? rec.color : undefined }}>
+                このテーマ・フックで制作 ▶
+              </Btn>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* フックだけ変える */}
+      {selectedRec !== null && (
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button onClick={() => setStep(3)} style={{
+            padding: "6px 14px", background: "none", border: "1px solid var(--border)",
+            color: "var(--text-dim)", fontSize: 11, cursor: "pointer",
+          }}>フックだけ変える ▶</button>
+          <Btn onClick={() => doBuild()}>採用中フックでスライド構築 ▶</Btn>
+        </div>
       )}
     </div>
   );
 
-  /* ─── Step 3: Hooks ─── */
-
-  const TYPE_COLOR = { 逆張り: "orange", 体験: "blue", 共感: "green", チェック: "gray", NG: "gray" };
+  /* ─── Step 3: Hook swap ─── */
 
   const renderStep3 = () => (
-    <Card>
-      <CardTitle>フック提案（{hooks.length}件）— クリックで採用</CardTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, maxHeight: 500, overflowY: "auto" }}>
-        {hooks.map((h, i) => (
-          <div key={i} onClick={() => setSelectedHook(h)} style={{
-            padding: "12px", cursor: "pointer", borderRadius: 4,
-            background: selectedHook === h ? "rgba(255,107,0,0.1)" : "var(--bg2)",
-            border: `1px solid ${selectedHook === h ? "var(--accent)" : "var(--border)"}`,
-          }}>
-            <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-              <Tag color={TYPE_COLOR[h.type] ?? "gray"}>{h.type}</Tag>
-              {h.fromStock && <span style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.05em" }}>ストック</span>}
-              {selectedHook === h && <span style={{ fontSize: 9, color: "var(--accent)" }}>採用中</span>}
+    <div>
+      <div style={{ marginBottom: 14, fontSize: 11, color: "var(--text-dim)" }}>
+        3つのアーキタイプのフックから選択するか、採用中フックのままスライド構築へ進んでください。
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginBottom: 16 }}>
+        {recommendations.map((rec, i) => {
+          const isSelected = selectedHook?.text === rec.hook.text;
+          return (
+            <div key={i} onClick={() => { setSelectedHook(rec.hook); setSelectedRec(i); setSelectedFormat(rec.format); }} style={{
+              background: isSelected ? `${rec.color}18` : "var(--bg2)",
+              border: `2px solid ${isSelected ? rec.color : "var(--border)"}`,
+              borderRadius: 6, padding: 14, cursor: "pointer",
+            }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <div style={{ background: rec.color, color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px" }}>{rec.archetype}</div>
+                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>{rec.hook.type}型フック</div>
+                {isSelected && <div style={{ marginLeft: "auto", fontSize: 10, color: rec.color }}>採用 ✓</div>}
+              </div>
+              <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.6, marginBottom: 8 }}>「{rec.hook.text}」</div>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5 }}>{rec.hook.reason}</div>
             </div>
-            <div style={{ fontSize: 12, color: selectedHook === h ? "var(--text)" : "var(--text-dim)", lineHeight: 1.6 }}>{h.text}</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-        {selectedHook && <div style={{ fontSize: 11, color: "var(--text-dim)", alignSelf: "center" }}>採用: 「{selectedHook.text.slice(0, 28)}…」</div>}
-        <Btn onClick={() => doBuild()} disabled={!selectedHook}>スライド構築へ ▶</Btn>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button onClick={() => setStep(2)} style={{
+          padding: "6px 14px", background: "none", border: "1px solid var(--border)",
+          color: "var(--text-dim)", fontSize: 11, cursor: "pointer",
+        }}>◀ テーマに戻る</button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          {selectedHook && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>採用: 「{selectedHook.text.slice(0, 28)}…」</div>}
+          <Btn onClick={() => doBuild()} disabled={!selectedHook}>スライド構築へ ▶</Btn>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 
   /* ─── Step 4: Slides + Script + Analysis ─── */

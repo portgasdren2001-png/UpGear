@@ -30,7 +30,7 @@ export default function App() {
       case "dashboard": return <Dashboard data={data} setFollowers={setFollowers} />;
       case "stock":     return <Stock data={data} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStudio={navToStudio} />;
       case "research":  return <MarketResearch data={data} learningData={learningData} onApplyToStudio={applyResearchToStudio} onNavToStudio={() => setPage("script")} />;
-      case "script":    return <ContentStudio data={data} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStock={navToStock} onNavToResearch={navToResearch} researchApply={researchApply} onClearResearch={() => setResearchApply(null)} addLearning={addLearning} />;
+      case "script":    return <ContentStudio data={data} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStock={navToStock} onNavToResearch={navToResearch} researchApply={researchApply} onClearResearch={() => setResearchApply(null)} addLearning={addLearning} learningData={learningData} />;
       case "posts":     return <Posts data={data} addPost={addPost} updatePost={updatePost} deletePost={deletePost} />;
       case "master":    return <Master data={data} />;
       default:          return null;

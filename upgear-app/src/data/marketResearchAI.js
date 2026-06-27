@@ -567,6 +567,115 @@ export function getLearningInsights(learningData) {
   return { count, avgViews, bestHook, bestFormat, patterns };
 }
 
+// ─── Top SNS Recommendations (3 archetypes) ───────────────────────────────────
+
+export function getTopRecommendations(item, learningData) {
+  const nick = getNick(item);
+  const cat = getCatWord(item);
+  const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "";
+  const catAudience = { GEAR: "全デスクワーカー", SHOES: "通勤者・外出者全員", WEAR: "毎日服を選ぶ人全員" };
+  const audienceDesc = catAudience[item.category] || "アイテムを探している人";
+
+  // ① バズ型 (B型) — 逆張り・一人称・非フォロワー配信狙い
+  const buzzTheme = `普通の${cat}をやめた日から変わったこと`;
+  const buzzHook = `まだ普通の${cat}使ってるの？　俺は1年前に決断した`;
+  const buzz = {
+    archetype: "バズ型",
+    archetypeDesc: "B型・逆張りフック",
+    color: "#FF6B00",
+    snsBasis: [
+      "逆張り構文は非フォロワー配信率が最も高い（006-B実証）",
+      `「${cat}」を使う${audienceDesc}が当事者——当事者が広いほど天井が上がる`,
+      "「まだ〜してるの？」の問いかけが離脱率を下げて2枚目維持率を上げる",
+    ],
+    expectedReach: "5,000〜30,000再生",
+    expectedFollow: "フォロー率 高",
+    expectedSave: "保存率 中",
+    theme: {
+      text: buzzTheme,
+      reason: `逆張り型テーマ。「${cat}を変えた」という断言が読者の「なぜ？」を引き出す。当事者が${audienceDesc}と広く、非フォロワーに刺さる。`,
+    },
+    hook: {
+      type: "逆張り",
+      text: buzzHook,
+      reason: `「まだ〜してるの？」の問いかけ構文。俺を主語にした一人称で距離ゼロ。フォロワー0の状態でも再生が広がる006-B型の確定パターン。`,
+    },
+    format: "story",
+  };
+
+  // ② 保存型 (C型) — チェックリスト・フィルター・長期資産狙い
+  const saveTheme = `${nick}を買う前に確認すべき3つのこと`;
+  const saveHook = `${nick}を買う前に確認しろ　後悔するパターンがある`;
+  const saves = {
+    archetype: "保存型",
+    archetypeDesc: "C型・チェックリスト",
+    color: "#6fa8dc",
+    snsBasis: [
+      "「確認」「リスト」「向いてない人」は保存率が3倍になるワード群",
+      "チェックリスト型は投稿から3ヶ月後も保存され続ける長期資産になる",
+      "「買う前に」の構文で購入検討層に直撃する——検索流入も増える",
+    ],
+    expectedReach: "1,000〜8,000再生",
+    expectedFollow: "フォロー率 中",
+    expectedSave: "保存率 高",
+    theme: {
+      text: saveTheme,
+      reason: `保存型テーマ。「〜の前に確認」という構文は保存率が高く、資産コンテンツになる。${nick}を検討している人が検索でもたどり着く。`,
+    },
+    hook: {
+      type: "チェック",
+      text: saveHook,
+      reason: `「確認しろ」という命令型が読者に義務感を与える。「後悔するパターン」という損失回避フレームが保存動機を最大化する。`,
+    },
+    format: "check",
+  };
+
+  // ③ フォロー型 (A型) — 正直体験・信頼構築・フォロワー化狙い
+  const followTheme = `${nick}を半年使った正直な話　良いとこ悪いとこ全部`;
+  const followHook = `${nick}を半年使って正直に言う`;
+  const follow = {
+    archetype: "フォロー型",
+    archetypeDesc: "A型・正直レビュー",
+    color: "#98c379",
+    snsBasis: [
+      "「正直」「全部言う」は信頼訴求が最も高い構文——フォロー率が上がる",
+      "良いとこ悪いとこの両面提示が「この人は信頼できる」という認識を作る",
+      "半年・1年という期間提示で「実際に使った人」の権威性が生まれる",
+    ],
+    expectedReach: "1,500〜6,000再生",
+    expectedFollow: "フォロー率 最高",
+    expectedSave: "保存率 中",
+    theme: {
+      text: followTheme,
+      reason: `正直レビュー型。「良いとこ悪いとこ全部」という両面提示が信頼を生む。フォロー率が最も高いパターンで、チャンネルの長期資産になる。`,
+    },
+    hook: {
+      type: "体験",
+      text: followHook,
+      reason: `「半年」という具体的な期間と「正直に」の組み合わせ。AIっぽくなく、使ってる人間の言葉として届く。フォロワー化率が高い。`,
+    },
+    format: "story",
+  };
+
+  // 学習データがあれば順序を最適化
+  const order = [buzz, saves, follow];
+  if (learningData?.patterns?.length >= 3) {
+    const patterns = learningData.patterns;
+    const hookAvg = {};
+    patterns.forEach(p => {
+      const t = p.hookType;
+      if (!t) return;
+      hookAvg[t] = hookAvg[t] || { views: 0, n: 0 };
+      hookAvg[t].views += Number(p.views) || 0;
+      hookAvg[t].n++;
+    });
+    const getBestViews = (type) => hookAvg[type] ? hookAvg[type].views / hookAvg[type].n : 0;
+    if (getBestViews("チェック") > getBestViews("逆張り")) order.splice(0, 0, ...order.splice(1, 1));
+  }
+
+  return order;
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function getNick(item) {
