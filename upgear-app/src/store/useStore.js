@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { initialData } from "../data/initialData";
 
 const STORAGE_KEY = "upgear_data";
+const LEARNING_KEY = "upgear_learning";
 
 function load() {
   try {
@@ -15,8 +16,21 @@ function save(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+function loadLearning() {
+  try {
+    const raw = localStorage.getItem(LEARNING_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { patterns: [] };
+}
+
+function saveLearning(data) {
+  localStorage.setItem(LEARNING_KEY, JSON.stringify(data));
+}
+
 export function useStore() {
   const [data, setData] = useState(() => load() || initialData);
+  const [learningData, setLearningDataState] = useState(() => loadLearning());
 
   const update = useCallback((updater) => {
     setData((prev) => {
@@ -59,11 +73,21 @@ export function useStore() {
     setData(initialData);
   };
 
+  const addLearning = (record) => {
+    setLearningDataState(prev => {
+      const next = { patterns: [...(prev.patterns || []), { ...record, ts: Date.now() }].slice(-200) };
+      saveLearning(next);
+      return next;
+    });
+  };
+
   return {
     data,
     addPost, updatePost, deletePost,
     addItem, updateItem, deleteItem,
     setFollowers,
     resetData,
+    learningData,
+    addLearning,
   };
 }

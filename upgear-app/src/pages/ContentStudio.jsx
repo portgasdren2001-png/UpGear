@@ -109,7 +109,7 @@ function OptionCard({ text, selected, onClick, dim }) {
 
 /* ─── Main Component ─── */
 
-export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock }) {
+export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock, onNavToResearch, researchApply, onClearResearch, addLearning }) {
   const { items } = data;
 
   const [step, setStep] = useState(1);
@@ -131,11 +131,20 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const [quality, setQuality] = useState(null);
   const [snsAnalysis, setSnsAnalysis] = useState(null);
   const [scriptView, setScriptView] = useState(false);
+  const [researchBanner, setResearchBanner] = useState(!!researchApply);
 
   const [analytics, setAnalytics] = useState({ views: "", likes: "", saves: "", comments: "", follows: "" });
   const [perfResult, setPerfResult] = useState(null);
 
   const item = items.find((i) => i.id === selectedItemId) ?? items[0];
+
+  /* ─── Apply research if coming from MarketResearch page ─── */
+  const [appliedResearch, setAppliedResearch] = useState(false);
+  if (researchApply && !appliedResearch) {
+    setAppliedResearch(true);
+    if (researchApply.hook) setTimeout(() => setSelectedHook(researchApply.hook), 0);
+    if (researchApply.plan?.format) setTimeout(() => setSelectedFormat(researchApply.plan.format), 0);
+  }
 
   /* ─── Actions ─── */
 
@@ -176,8 +185,22 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   }, [item, selectedHook, selectedFormat]);
 
   const doAnalyze = useCallback(() => {
-    setPerfResult(analyzePerformance({ ...analytics, hook: selectedHook?.text ?? "" }));
-  }, [analytics, selectedHook]);
+    const result = analyzePerformance({ ...analytics, hook: selectedHook?.text ?? "" });
+    setPerfResult(result);
+    if (addLearning && analytics.views) {
+      addLearning({
+        hookType: selectedHook?.type ?? "",
+        hookText: selectedHook?.text ?? "",
+        format: selectedFormat ?? "",
+        itemId: item?.id ?? "",
+        views: Number(analytics.views) || 0,
+        likes: Number(analytics.likes) || 0,
+        saves: Number(analytics.saves) || 0,
+        comments: Number(analytics.comments) || 0,
+        follows: Number(analytics.follows) || 0,
+      });
+    }
+  }, [analytics, selectedHook, selectedFormat, item, addLearning]);
 
   const selectSlideOption = (si, oi) =>
     setSlides((prev) => prev.map((s, i) => i === si ? { ...s, selected: oi } : s));
@@ -641,10 +664,31 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
 
   return (
     <div>
-      <PageHeader
-        title="コンテンツ制作スタジオ"
-        sub={`UpGear v4.6 — ${item?.label ?? "—"} / ストック ${item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0}/8`}
-      />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+        <PageHeader
+          title="コンテンツ制作スタジオ"
+          sub={`UpGear v4.6 — ${item?.label ?? "—"} / ストック ${item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0}/8`}
+        />
+        {onNavToResearch && (
+          <button onClick={() => onNavToResearch(item?.id)} style={{
+            padding: "6px 14px", background: "none", border: "1px solid var(--border)",
+            color: "var(--text-dim)", fontSize: 11, cursor: "pointer", flexShrink: 0, marginTop: 4,
+          }}>◐ 市場調査AI</button>
+        )}
+      </div>
+      {researchApply && researchBanner && (
+        <div style={{
+          marginBottom: 12, padding: "10px 14px", background: "rgba(255,107,0,0.08)",
+          border: "1px solid var(--accent)", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <div style={{ fontSize: 11, color: "var(--accent)" }}>
+            ◐ 市場調査から反映済み — フック・フォーマットが設定されています。Step3からスライド構築へ進んでください。
+          </div>
+          <button onClick={() => { setResearchBanner(false); onClearResearch?.(); }} style={{
+            background: "none", border: "none", color: "var(--text-dim)", fontSize: 12, cursor: "pointer",
+          }}>✕</button>
+        </div>
+      )}
       {stepBar}
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
