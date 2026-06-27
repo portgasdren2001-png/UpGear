@@ -453,6 +453,83 @@ export function analyzeSNSPotential(item, hook, format) {
   };
 }
 
+// ─── Archetype-based Slide Generation ────────────────────────────────────────
+
+export function generateSlidesByArchetypes(item, recommendations, mode) {
+  const [buzz, save, follow] = recommendations;
+  if (!buzz || !save || !follow) return generateAllSlides(item, "", FORMATS[0].id, mode);
+
+  const s = item.stock || {};
+  const cat = getCatWord(item);
+  const nick = getNick(item);
+
+  // S1: フック (sub/main/note)
+  const s1 = [
+    {
+      archetype: buzz.archetype, archetypeColor: buzz.color,
+      sub: "まだ普通の" + cat + "使ってるの？",
+      main: buzz.hook.text.split(/[\s　]+/).slice(0, 2).join("") || "俺は決断した",
+      note: "1年前の俺に見せたかった話",
+    },
+    {
+      archetype: save.archetype, archetypeColor: save.color,
+      sub: "買う前に確認",
+      main: "後悔ゼロの選び方",
+      note: "この3点だけ押さえればいい",
+    },
+    {
+      archetype: follow.archetype, archetypeColor: follow.color,
+      sub: "正直に言う",
+      main: follow.hook.text.split(/[\s　]+/).slice(0, 2).join("") || "半年使った話",
+      note: "体験ベースでレビューする",
+    },
+  ];
+
+  // S2: before
+  const s2 = applyModeToOptions([
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `普通の${cat}で毎日消耗していた。気づいてなかった。それが当たり前だと思っていた。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `${cat}を選ぶときに何を確認すべきか分からなかった。情報が多すぎて判断できなかった。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `最初は半信半疑だった。${s.situation || `普通の${cat}から変える理由が見つからなかった`}。` },
+  ], mode);
+
+  // S3: 露見シーン
+  const s3 = applyModeToOptions([
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${s.reveal || "1週間後"}。元に戻れなくなっていた。当たり前が変わっていた。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `${s.reveal || "使い始めて気づいた"}。3つのポイントで全ての問題が解決していた。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `使って3日。気づいたら毎日使っていた。${s.change || "体感で分かった"}。` },
+  ], mode);
+
+  // S4: 認定理由
+  const s4 = applyModeToOptions([
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${item.label}　${item.score}点。理由はシンプル。${buzz.theme.text}。これだけでいい。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `認定${item.score}点の理由。①${s.good || "使いやすさ"} ②長期コスパ ③${cat}選びの基準をクリア。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `正直に言う。${s.good || "使って初めて分かる良さがある"}。俺の体験ベースで${item.score}点。` },
+  ], mode);
+
+  // S5: 向いていない人
+  const s5 = applyModeToOptions([
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `向いていない人を先に言う。${s.ng1 || `こだわりが強すぎる人`}。これが当てはまるなら別を選べ。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `買う前チェックリスト。✕ ${s.ng1 || "使用頻度が低い"} ✕ ${s.ng2 || "とにかく安さ優先"}。2つ当てはまる人は不要。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺も最初は向いていないと思ってた。でも${s.change || "使って変わった"}。${s.ng1 || `ただし頻度が低い人には不要`}。` },
+  ], mode);
+
+  // S6: 結論
+  const s6 = applyModeToOptions([
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${buzz.theme.text}。${s.conclusion || `迷ってる時間が一番もったいない`}。フォローして次の装備も確認して。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `保存して次に使って。${s.conclusion || `${cat}で迷いたくない人だけ買え`}。リストはプロフィールから。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺の結論。${s.conclusion || follow.theme.text}。体験した人間が言うから信じていい。` },
+  ], mode);
+
+  return [
+    { role: "フック（1枚目）", type: "hook", options: s1 },
+    { role: "before（2枚目）", type: "text", options: s2 },
+    { role: "露見シーン（3枚目）", type: "text", options: s3 },
+    { role: "認定理由（4枚目）", type: "text", options: s4 },
+    { role: "向いていない人（5枚目）", type: "text", options: s5 },
+    { role: "結論（6枚目）", type: "text", options: s6 },
+  ];
+}
+
 // ─── Regeneration Modes ───────────────────────────────────────────────────────
 
 export const REGEN_MODES = [
