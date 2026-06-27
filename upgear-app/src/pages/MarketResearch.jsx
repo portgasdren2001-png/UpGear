@@ -72,6 +72,28 @@ function CopyBtn({ text }) {
   );
 }
 
+function EvidenceBlock({ topic, facts, analysis, basis }) {
+  return (
+    <div style={{ marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--border)", padding: 14 }}>
+      <div style={{ fontSize: 11, color: "var(--accent)", fontWeight: 600, marginBottom: 10, letterSpacing: "0.05em" }}>▶ {topic}</div>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, color: "#6fa8dc", letterSpacing: "0.1em", marginBottom: 4, borderLeft: "2px solid #6fa8dc", paddingLeft: 6 }}>事実</div>
+        {facts.map((f, i) => <div key={i} style={{ fontSize: 11, color: "var(--text)", padding: "2px 0", paddingLeft: 8, lineHeight: 1.6 }}>• {f}</div>)}
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 4, borderLeft: "2px solid var(--accent)", paddingLeft: 6 }}>考察</div>
+        {analysis.map((a, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "2px 0", paddingLeft: 8, lineHeight: 1.6 }}>→ {a}</div>)}
+      </div>
+      <div>
+        <div style={{ fontSize: 9, color: "#98c379", letterSpacing: "0.1em", marginBottom: 4, borderLeft: "2px solid #98c379", paddingLeft: 6 }}>根拠</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {basis.map((b, i) => <span key={i} style={{ fontSize: 9, color: "#98c379", border: "1px solid #98c379", padding: "1px 6px" }}>{b}</span>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SelectableCard({ text, selected, onSelect, children }) {
   return (
     <div style={{
@@ -90,18 +112,23 @@ function SelectableCard({ text, selected, onSelect, children }) {
 /* ─── Tab definitions ─── */
 
 const TABS = [
-  { id: "overview",        label: "商品概要" },
-  { id: "reviews",         label: "口コミ" },
-  { id: "sns",             label: "SNS分析" },
-  { id: "search",          label: "検索ニーズ" },
-  { id: "competitors",     label: "競合分析" },
-  { id: "target",          label: "ターゲット" },
-  { id: "score",           label: "UpGearスコア" },
-  { id: "differentiation", label: "差別化" },
-  { id: "plans",           label: "投稿企画" },
-  { id: "titles",          label: "タイトル" },
-  { id: "hooks",           label: "フック" },
-  { id: "ctas",            label: "CTA" },
+  { id: "overview",        label: "①商品概要" },
+  { id: "reviews",         label: "②口コミ" },
+  { id: "sns",             label: "③SNS分析" },
+  { id: "search",          label: "④検索ニーズ" },
+  { id: "competitors",     label: "⑤競合分析" },
+  { id: "target",          label: "⑥ターゲット" },
+  { id: "score",           label: "⑦UpGearスコア" },
+  { id: "differentiation", label: "⑧差別化" },
+  { id: "optimal_sns",     label: "⑨最適SNS判定" },
+  { id: "strategy",        label: "⑩投稿戦略" },
+  { id: "script",          label: "⑪投稿台本" },
+  { id: "titles",          label: "⑫タイトル" },
+  { id: "hooks",           label: "⑬フック" },
+  { id: "ctas",            label: "⑭CTA" },
+  { id: "prepost",         label: "⑮投稿戦略説明" },
+  { id: "evidence",        label: "⑯根拠一覧" },
+  { id: "plans",           label: "投稿企画20本" },
 ];
 
 /* ─── Main Component ─── */
@@ -117,6 +144,7 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedTitles, setSelectedTitles] = useState([]);
   const [selectedCTAs, setSelectedCTAs] = useState({ saves: null, comments: null, follows: null });
+  const [scriptArchetype, setScriptArchetype] = useState(0);
 
   const item = items.find(i => i.id === selectedItemId) ?? items[0];
   const insights = getLearningInsights(learningData);
@@ -489,6 +517,172 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
     </div>
   );
 
+  const ARCH_COLORS = { "バズ型": "#FF6B00", "保存型": "#6fa8dc", "フォロー型": "#98c379" };
+
+  const renderOptimalSNS = () => research && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {research.optimalSNS.map((p, i) => (
+        <div key={i} style={{ background: "var(--bg2)", border: `1px solid ${i === 0 ? "var(--accent)" : "var(--border)"}`, padding: 16 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: i === 0 ? "var(--accent)" : "var(--text-dim)", width: 28 }}>#{p.rank}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, color: i === 0 ? "var(--accent)" : "var(--text)", fontWeight: 600 }}>{p.platform}</div>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{p.format}</div>
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: p.score >= 80 ? "var(--accent)" : p.score >= 60 ? "#6fa8dc" : "var(--border)" }}>
+              {p.score}<span style={{ fontSize: 12, fontWeight: 400 }}>/100</span>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+            <div>
+              <SL>向いている理由</SL>
+              <BulletList items={p.pros} />
+            </div>
+            <div>
+              <SL color="#e06c75">向いていない理由</SL>
+              <BulletList items={p.cons} color="#e06c75" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 4 }}>期待できる成果</div>
+              <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.5 }}>{p.result}</div>
+            </div>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 9, color: "var(--text-dim)", borderLeft: "2px solid #98c379", paddingLeft: 6 }}>
+            根拠: {p.basis}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderStrategy = () => research && (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <Card>
+          <CardTitle>投稿スケジュール</CardTitle>
+          <Row label="最適プラットフォーム" value={research.postStrategy.topPlatform} accent />
+          <Row label="推奨投稿頻度" value={research.postStrategy.frequency} accent />
+          <Row label="推奨曜日" value={research.postStrategy.bestDays.join(" / ")} />
+          <div style={{ marginTop: 10 }} />
+          <SL>推奨投稿時間帯</SL>
+          <BulletList items={research.postStrategy.bestTimes} />
+          <div style={{ marginTop: 10, fontSize: 10, color: "var(--text-dim)", lineHeight: 1.7 }}>
+            根拠: {research.postStrategy.reason}
+          </div>
+        </Card>
+        <Card>
+          <CardTitle>伸びる理由</CardTitle>
+          <BulletList items={research.postStrategy.growthReasons} />
+        </Card>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <Card>
+          <CardTitle>シリーズ化案（{research.postStrategy.series.length}案）</CardTitle>
+          {research.postStrategy.series.map((s, i) => (
+            <div key={i} style={{ marginBottom: 10, padding: "10px 12px", background: "var(--bg3)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, color: "var(--accent)", marginBottom: 6 }}>{s.title}</div>
+              {s.plans.map((p, pi) => (
+                <div key={pi} style={{ fontSize: 10, color: "var(--text-dim)", padding: "2px 0" }}>→ {p}</div>
+              ))}
+            </div>
+          ))}
+        </Card>
+      </div>
+    </div>
+  );
+
+  const renderScript = () => research && (
+    <div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {research.detailedScript.map((ds, i) => (
+          <button key={i} onClick={() => setScriptArchetype(i)} style={{
+            padding: "8px 16px", background: scriptArchetype === i ? ARCH_COLORS[ds.archetype] : "var(--bg2)",
+            border: `1px solid ${scriptArchetype === i ? ARCH_COLORS[ds.archetype] : "var(--border)"}`,
+            color: scriptArchetype === i ? "#fff" : "var(--text-dim)",
+            fontSize: 11, cursor: "pointer", fontWeight: scriptArchetype === i ? 700 : 400,
+          }}>{ds.archetype}</button>
+        ))}
+      </div>
+      {research.detailedScript[scriptArchetype] && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {research.detailedScript[scriptArchetype].slides.map((slide, si) => (
+            <div key={si} style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: 16 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+                <div style={{ background: ARCH_COLORS[research.detailedScript[scriptArchetype].archetype], color: "#fff", fontSize: 12, fontWeight: 700, padding: "3px 10px" }}>
+                  S{slide.slideNum}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--accent)", letterSpacing: "0.05em" }}>{slide.role}</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <SL>表示テキスト</SL>
+                  <div style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.7, whiteSpace: "pre-wrap", padding: "8px", background: "var(--bg3)", marginBottom: 8 }}>
+                    {slide.displayText}
+                  </div>
+                  <SL>ナレーション</SL>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{slide.narration}</div>
+                </div>
+                <div>
+                  <SL>画像イメージ</SL>
+                  <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6, marginBottom: 8 }}>{slide.imageIdea}</div>
+                  <SL>この枚の狙い</SL>
+                  <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.6, marginBottom: 8 }}>{slide.goal}</div>
+                  <SL color="#6fa8dc">離脱防止ポイント</SL>
+                  <div style={{ fontSize: 11, color: "#6fa8dc", lineHeight: 1.6, marginBottom: 6 }}>{slide.dropPrevention}</div>
+                  <div style={{ fontSize: 9, color: "#98c379", borderLeft: "2px solid #98c379", paddingLeft: 6, lineHeight: 1.5 }}>
+                    根拠: {slide.basis}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderPrePost = () => research && (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {research.prePostStrategy.map((strategy, i) => (
+        <div key={i} style={{ background: "var(--bg2)", border: `2px solid ${strategy.color}`, padding: 16 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+            <div style={{ background: strategy.color, color: "#fff", fontSize: 12, fontWeight: 700, padding: "4px 12px" }}>{strategy.archetype}</div>
+            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>投稿前の戦略説明</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <SL>この切り口を選んだ理由</SL>
+              <div style={{ fontSize: 11, color: "var(--text)", lineHeight: 1.7, marginBottom: 10 }}>{strategy.whyThisAngle}</div>
+              <SL>ターゲットに刺さる理由</SL>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7, marginBottom: 10 }}>{strategy.whyHitsTarget}</div>
+            </div>
+            <div>
+              <SL>競合との差別化</SL>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7, marginBottom: 10 }}>{strategy.competitorDiff}</div>
+              <SL color="#98c379">市場調査の根拠</SL>
+              <div style={{ fontSize: 10, color: "#98c379", lineHeight: 1.9, whiteSpace: "pre-wrap", marginBottom: 10 }}>{strategy.researchBasis}</div>
+              <SL color="#6fa8dc">期待できる視聴者の反応</SL>
+              <div style={{ fontSize: 11, color: "#6fa8dc", lineHeight: 1.7 }}>{strategy.expectedReaction}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderEvidence = () => research && (
+    <div>
+      <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(255,107,0,0.06)", border: "1px solid var(--accent)", fontSize: 10, color: "var(--accent)", lineHeight: 1.8 }}>
+        ⑯ 根拠表示ルール: 事実（確認されたデータ）と考察（分析・推論）を分けて表示。根拠タグで出典を明示。
+      </div>
+      {research.evidence.map((block, i) => (
+        <EvidenceBlock key={i} {...block} />
+      ))}
+    </div>
+  );
+
   const renderTab = () => {
     if (!research) return null;
     switch (activeTab) {
@@ -500,6 +694,11 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
       case "target":          return renderTarget();
       case "score":           return renderScore();
       case "differentiation": return renderDiff();
+      case "optimal_sns":     return renderOptimalSNS();
+      case "strategy":        return renderStrategy();
+      case "script":          return renderScript();
+      case "prepost":         return renderPrePost();
+      case "evidence":        return renderEvidence();
       case "plans":           return renderPlans();
       case "titles":          return renderTitles();
       case "hooks":           return renderHooks();
