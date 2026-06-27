@@ -190,8 +190,6 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
         <Row label="スコア" value={`${research.overview.score}点 / ${research.overview.judgment}`} accent />
         <Row label="価格帯" value={research.overview.priceRange} />
         <Row label="市場での立ち位置" value={research.overview.position} />
-        <Row label="ストックデータ" value={`${research.overview.stockFilled}/8 入力済み`}
-             accent={research.overview.stockFilled < 5} />
         <div style={{ marginTop: 12 }}>
           <SL>特徴・良い点</SL>
           <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7 }}>{research.overview.features}</div>
@@ -340,8 +338,8 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
           <div style={{ fontSize: 12, color: "var(--accent)", marginBottom: 8, fontWeight: 500 }}>{item.label}</div>
           <Row label="価格" value={item.price ? `¥${Number(item.price).toLocaleString()}` : "—"} accent />
           <Row label="市場ポジション" value={item.judgment} accent />
-          <Row label="強み" value={item.stock?.good?.slice(0, 40) || "ストックデータから取得"} />
-          <Row label="向いていない人" value={item.stock?.ng1?.slice(0, 40) || "ストックデータから取得"} />
+          <Row label="強み" value="毎日使えるコスパの良さ・長期的な価値" />
+          <Row label="向いていない人" value="使用頻度が低い人・コスパ最優先の人" />
         </div>
       </div>
     </Card>
@@ -480,7 +478,6 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
           }}>
             <div style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
               <Tag color={HOOK_TYPE_COLOR[h.type] ?? "gray"}>{h.type}</Tag>
-              {h.fromStock && <span style={{ fontSize: 9, color: "var(--accent)" }}>ストック</span>}
               {selectedHook === h && <span style={{ fontSize: 9, color: "var(--accent)" }}>採用中</span>}
             </div>
             <div style={{ fontSize: 12, color: selectedHook === h ? "var(--text)" : "var(--text-dim)", lineHeight: 1.6 }}>{h.text}</div>

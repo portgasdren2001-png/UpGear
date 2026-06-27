@@ -36,16 +36,8 @@ export function getMarketResearch(category) {
 export function generateThemes(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const s = item.stock || {};
 
-  const stockThemes = [];
-  if (s.situation) stockThemes.push(`${s.situation.slice(0, 20)}…だった話`);
-  if (s.reveal)    stockThemes.push(`${s.reveal.slice(0, 20)}…の瞬間に気づいた`);
-  if (s.change)    stockThemes.push(`${s.change.slice(0, 20)}…になった理由`);
-  if (s.conclusion) stockThemes.push(s.conclusion);
-  if (s.ng1)       stockThemes.push(`${nick}が向いてない人の特徴　${s.ng1.slice(0, 15)}の話`);
-
-  const generic = [
+  return [
     `半年使って分かった${nick}の正直な話`,
     `${nick}を買って後悔した人がやってたこと`,
     `毎日使う人には必須　${nick}の話`,
@@ -65,9 +57,8 @@ export function generateThemes(item) {
     `買う前に5分だけ見て`,
     `${nick}で変わった1つのこと`,
     `失敗しない${cat}選びの基準`,
+    `普通の${cat}をやめた日から変わったこと`,
   ];
-
-  return [...stockThemes, ...generic].slice(0, 20);
 }
 
 // ─── Hook Generation ─────────────────────────────────────────────────────────
@@ -75,26 +66,9 @@ export function generateThemes(item) {
 export function generateHooks(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const s = item.stock || {};
   const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "1万円";
 
-  const stockHooks = [];
-  if (s.hook)     stockHooks.push({ type: "体験", text: s.hook, fromStock: true });
-  if (s.situation) {
-    const sit = s.situation.slice(0, 25);
-    stockHooks.push({ type: "共感", text: `${sit}…　俺もそうだった`, fromStock: true });
-  }
-  if (s.reveal) {
-    stockHooks.push({ type: "体験", text: `${s.reveal.slice(0, 25)}…　その瞬間に確信した`, fromStock: true });
-  }
-  if (s.conclusion) {
-    stockHooks.push({ type: "逆張り", text: s.conclusion, fromStock: true });
-  }
-  if (s.ng1) {
-    stockHooks.push({ type: "NG", text: `${s.ng1.slice(0, 30)}…　向いてない人がいる`, fromStock: true });
-  }
-
-  const generic = [
+  return [
     { type: "逆張り", text: `${nick}をまだ選んでいるか　俺は1年前に決断した` },
     { type: "逆張り", text: `まだ普通の${cat}使ってるの？` },
     { type: "逆張り", text: `${nick}　買わなくていい人がいる` },
@@ -103,16 +77,17 @@ export function generateHooks(item) {
     { type: "体験",   text: `${nick}を半年使って正直に言う` },
     { type: "体験",   text: `買ってから毎日使ってる　それだけで答えは出てる` },
     { type: "体験",   text: `最初は半信半疑だった　使って3日で確信した` },
+    { type: "体験",   text: `1年前の俺に教えてやりたい` },
+    { type: "体験",   text: `元に戻れなくなった話をする` },
     { type: "共感",   text: `${cat}選びで5分以上迷ったことある？` },
     { type: "共感",   text: `なんでもっと早く気づかなかったんだろ` },
     { type: "共感",   text: `同じ失敗をしてほしくないから言う` },
+    { type: "共感",   text: `安物を買って後悔したことある？　俺はある` },
     { type: "チェック", text: `${nick}を買う前に確認しろ　後悔するパターンがある` },
     { type: "チェック", text: `買う前に3つだけ確認して` },
     { type: "NG",     text: `${nick}で後悔した話` },
     { type: "NG",     text: `ここだけは失敗した　正直に言う` },
   ];
-
-  return [...stockHooks, ...generic];
 }
 
 // ─── Formats ─────────────────────────────────────────────────────────────────
@@ -152,7 +127,6 @@ export function generateAllSlides(item, hook, format, mode) {
 
 function genS1(item, hook, mode) {
   const parts = (hook || "").split(/[\s　]+/);
-  const s = item.stock || {};
   const cat = getCatWord(item);
   const nick = getNick(item);
 
@@ -160,7 +134,7 @@ function genS1(item, hook, mode) {
     { sub: parts[0] || cat + "を", main: (parts[1] || "まだ選んでいるか").slice(0, 10), note: parts.slice(2).join("") || "俺は1年前に決断した" },
     { sub: cat + "で", main: "迷ってる人へ", note: "1年使った俺が正直に言う" },
     { sub: "まだ", main: "損してるかも", note: "これ知らずに後悔してほしくない" },
-    { sub: s.situation?.slice(0, 8) || "買う前に", main: "見てほしい", note: "後悔するパターンがある" },
+    { sub: "買う前に", main: "見てほしい", note: "後悔するパターンがある" },
   ];
 
   if (mode === "口語") return base.map(o => ({ ...o, note: o.note.replace(/ください/g, "").replace(/ます/g, "る") }));
@@ -169,14 +143,12 @@ function genS1(item, hook, mode) {
 }
 
 function genS2(item, mode) {
-  const s = item.stock || {};
   const cat = getCatWord(item);
-  const sit = s.situation || `普通の${cat}を使っていた`;
 
   const base = [
-    { text: `${sit}。それが当たり前だと思っていた。` },
+    { text: `普通の${cat}を使っていた。それが当たり前だと思っていた。` },
     { text: `毎日小さなストレスがあった。でも慣れていた。` },
-    { text: `${sit.slice(0, 30)}。気にしないようにしていた。` },
+    { text: `普通の${cat}で十分だと思っていた。気にしないようにしていた。` },
     { text: `前の${cat}でも困ってはいなかった。ただ何かが足りなかった。` },
   ];
 
@@ -184,59 +156,53 @@ function genS2(item, mode) {
 }
 
 function genS3(item, mode) {
-  const s = item.stock || {};
   const cat = getCatWord(item);
-  const rev = s.reveal || `以前の${cat}に戻ったとき気づいた`;
 
   const base = [
-    { text: `${rev}。俺の中の当たり前が変わっていた。` },
+    { text: `以前の${cat}に戻ったとき気づいた。俺の中の当たり前が変わっていた。` },
     { text: `1ヶ月後。元に戻れなくなっていた。` },
-    { text: `${s.change || "気づいたら毎日使っていた"}。それだけで答えは出ていた。` },
-    { text: `以前の${cat}を使おうとして気づいた。${rev.slice(0, 20)}。` },
+    { text: `気づいたら毎日使っていた。それだけで答えは出ていた。` },
+    { text: `以前の${cat}を使おうとして気づいた。もう戻れなかった。` },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
 function genS4(item, mode) {
-  const s = item.stock || {};
-  const good = s.good || "使って初めて分かる良さがある";
+  const cat = getCatWord(item);
+  const good = "使って初めて分かる良さがある";
 
   const base = [
-    { text: `${item.label}　${item.score}点。${good.slice(0, 40)}。` },
-    { text: `正直に言う。${good.slice(0, 50) || "これは良かった。毎日使うものだから。"}` },
-    { text: `認定理由は一つだけ。${(s.change || good).slice(0, 40)}。` },
-    { text: `${item.score}点の理由。${good.slice(0, 50)}。向いている人には刺さる。` },
+    { text: `${item.label}　${item.score}点。${good}。` },
+    { text: `正直に言う。これは良かった。毎日使うものだから。` },
+    { text: `認定理由は一つだけ。気づいたら元に戻れなくなっていた。` },
+    { text: `${item.score}点の理由。毎日使うものに妥協しなかったから。向いている人には刺さる。` },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
 function genS5(item, mode) {
-  const s = item.stock || {};
-  const ng1 = s.ng1 || "こだわりが強い人には向かない";
-  const ng2 = s.ng2 || "使用頻度が低い人には不要";
+  const cat = getCatWord(item);
 
   const base = [
-    { text: `向いていない人を先に言う。${ng1}。${ng2}。` },
-    { text: `買って後悔するパターン。${ng1}。これが当てはまるなら別を選べ。` },
-    { text: `正直に言う。${ng1}。${ng2}。2つ当てはまる人は買わなくていい。` },
-    { text: `買う前に確認。${ng1}。クリアできる人だけ買え。` },
+    { text: `向いていない人を先に言う。こだわりが強すぎる人。使用頻度が低い人。` },
+    { text: `買って後悔するパターン。使わない日が多い人。これが当てはまるなら別を選べ。` },
+    { text: `正直に言う。毎日使わない人には不要。コスパ最優先の人には合わない。2つ当てはまる人は買わなくていい。` },
+    { text: `買う前に確認。毎日使えるか。長期で使えるか。クリアできる人だけ買え。` },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
 function genS6(item, mode) {
-  const s = item.stock || {};
   const cat = getCatWord(item);
-  const conc = s.conclusion || `${cat}で迷いたくない人だけ買え`;
 
   const base = [
-    { text: `${conc}。保存して次の装備はプロフィールから。` },
-    { text: `答えは決まっている。${conc}。` },
-    { text: `迷ってる時間が一番もったいない。${conc}。` },
-    { text: `俺の結論はこれだけ。${conc}。` },
+    { text: `${cat}で迷いたくない人だけ買え。保存して次の装備はプロフィールから。` },
+    { text: `答えは決まっている。毎日使える${cat}を選べ。` },
+    { text: `迷ってる時間が一番もったいない。${cat}で判断を減らせ。` },
+    { text: `俺の結論はこれだけ。毎日使う人なら絶対に元が取れる。` },
   ];
 
   return applyModeToOptions(base, mode);
@@ -259,15 +225,14 @@ function applyModeToOptions(options, mode) {
 // ─── Caption & Hashtag ───────────────────────────────────────────────────────
 
 export function generateCaption(item, hook) {
-  const s = item.stock || {};
   const cat = getCatWord(item);
-  const conc = s.conclusion || `${cat}で迷いたくない人だけ買え`;
+  const nick = getNick(item);
   const hookText = (hook && typeof hook === "object") ? (hook.text || "") : (hook || "");
 
   return [
-    `${hookText}\n\n${conc}\n\nプロフィールのリンクから詳細をチェック`,
-    `${(s.situation || "").slice(0, 30) || "毎日使うものだから"}\nだから${getNick(item)}を選んだ\n\n向いてない人→${(s.ng1 || "こだわりが強い人").slice(0, 20)}\n\n保存して次の投稿も見て`,
-    `正直に言う。${getNick(item)}は${item.score}点。\n\n${(s.good || "使って初めて分かる良さがある").slice(0, 40)}\n\n${conc}`,
+    `${hookText}\n\n${cat}で迷いたくない人だけ買え\n\nプロフィールのリンクから詳細をチェック`,
+    `毎日使うものだから\nだから${nick}を選んだ\n\n向いてない人→使用頻度が低い人\n\n保存して次の投稿も見て`,
+    `正直に言う。${nick}は${item.score}点。\n\n使って初めて分かる良さがある\n\n${cat}で迷いたくない人だけ買え`,
   ];
 }
 
@@ -388,7 +353,6 @@ export function analyzePerformance({ views, likes, saves, comments, follows, hoo
 export function analyzeSNSPotential(item, hook, format) {
   const hookText = (hook && typeof hook === "object") ? (hook.text || "") : (hook || "");
   const hookType = (hook && typeof hook === "object") ? (hook.type || "") : "";
-  const s = item.stock || {};
 
   // 当事者の広さ (0-30): 誰が対象か
   const audienceMap = { GEAR: 30, SHOES: 20, WEAR: 18 };
@@ -403,31 +367,24 @@ export function analyzeSNSPotential(item, hook, format) {
     (isReverse ? 10 : 0) + (hasIchi ? 8 : 0) + (isQuestion ? 7 : 0)
   );
 
-  // 保存型スコア (0-20): C型チェックリスト、保存ワード
+  // 保存型スコア (0-20): C型チェックリスト
   const saveFormats = ["check", "rank", "compare"];
   const hasSaveFormat = saveFormats.includes(format);
-  const hasSaveWords = s.conclusion?.includes("確認") || s.ng1?.includes("確認");
-  const saveScore = Math.min(20, (hasSaveFormat ? 12 : 4) + (hasSaveWords ? 4 : 0) + (s.ng1 ? 4 : 0));
+  const saveScore = Math.min(20, (hasSaveFormat ? 16 : 4));
 
   // TikTok適合度 (0-15): フォーマット・フックの組み合わせ
   const tiktokScore = Math.min(15,
     (hookText.length > 8 && hookText.length < 35 ? 6 : 2) +
-    (format === "story" || format === "fail" ? 5 : 3) +
-    (s.situation ? 4 : 0)
+    (format === "story" || format === "fail" ? 5 : 3) + 4
   );
 
-  // ストック充実度 (0-10): ストックデータの埋まり具合
-  const stockFields = ["situation", "hook", "reveal", "change", "good", "ng1", "ng2", "conclusion"];
-  const filledCount = stockFields.filter(k => s[k] && s[k].trim()).length;
-  const stockScore = Math.round((filledCount / stockFields.length) * 10);
-
-  const total = audience + buzzScore + saveScore + tiktokScore + stockScore;
+  const total = audience + buzzScore + saveScore + tiktokScore;
 
   // 推定リーチ予測
   let reachRange = "";
-  if (total >= 80)      reachRange = "5,000〜30,000再生";
-  else if (total >= 65) reachRange = "1,500〜8,000再生";
-  else if (total >= 50) reachRange = "500〜3,000再生";
+  if (total >= 75)      reachRange = "5,000〜30,000再生";
+  else if (total >= 60) reachRange = "1,500〜8,000再生";
+  else if (total >= 45) reachRange = "500〜3,000再生";
   else                  reachRange = "〜1,000再生";
 
   // 型判定
@@ -435,20 +392,16 @@ export function analyzeSNSPotential(item, hook, format) {
 
   // 課題と改善提案
   const issues = [];
-  if (audience < 20)    issues.push({ dim: "当事者の広さ", tip: "GEARカテゴリは当事者が最も広い。テーマを「全デスクワーカー」が当事者になる視点に広げよう。" });
-  if (buzzScore < 15)   issues.push({ dim: "バズ型フック", tip: "「まだ〇〇してるの？」「俺は〜した」の逆張り一人称フックに変えるとB型になる。" });
-  if (saveScore < 10)   issues.push({ dim: "保存されやすさ", tip: "チェックリスト型（C型）やNG提示を追加すると保存率が上がる。" });
-  if (stockScore < 6)   issues.push({ dim: "ストック充実度", tip: "ストック画面で体験データを埋めると、より具体的なコンテンツが生成される。" });
-  if (!s.reveal)        issues.push({ dim: "露見シーン", tip: "「元に戻れなくなった瞬間」のエピソードがないと2枚目維持率が下がる。ストックに追記しよう。" });
+  if (audience < 20)  issues.push({ dim: "当事者の広さ", tip: "GEARカテゴリは当事者が最も広い。テーマを「全デスクワーカー」が当事者になる視点に広げよう。" });
+  if (buzzScore < 15) issues.push({ dim: "バズ型フック", tip: "「まだ〇〇してるの？」「俺は〜した」の逆張り一人称フックに変えるとB型になる。" });
+  if (saveScore < 10) issues.push({ dim: "保存されやすさ", tip: "チェックリスト型（C型）やNG提示を追加すると保存率が上がる。" });
 
   return {
     total,
-    breakdown: { audience, buzz: buzzScore, saves: saveScore, tiktok: tiktokScore, stock: stockScore },
+    breakdown: { audience, buzz: buzzScore, saves: saveScore, tiktok: tiktokScore },
     audienceLabel,
     reachRange,
     postType,
-    filledCount,
-    stockTotal: stockFields.length,
     issues,
   };
 }
@@ -459,7 +412,6 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
   const [buzz, save, follow] = recommendations;
   if (!buzz || !save || !follow) return generateAllSlides(item, "", FORMATS[0].id, mode);
 
-  const s = item.stock || {};
   const cat = getCatWord(item);
   const nick = getNick(item);
 
@@ -489,35 +441,35 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
   const s2 = applyModeToOptions([
     { archetype: buzz.archetype, archetypeColor: buzz.color, text: `普通の${cat}で毎日消耗していた。気づいてなかった。それが当たり前だと思っていた。` },
     { archetype: save.archetype, archetypeColor: save.color, text: `${cat}を選ぶときに何を確認すべきか分からなかった。情報が多すぎて判断できなかった。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `最初は半信半疑だった。${s.situation || `普通の${cat}から変える理由が見つからなかった`}。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `最初は半信半疑だった。普通の${cat}から変える理由が見つからなかった。` },
   ], mode);
 
   // S3: 露見シーン
   const s3 = applyModeToOptions([
-    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${s.reveal || "1週間後"}。元に戻れなくなっていた。当たり前が変わっていた。` },
-    { archetype: save.archetype, archetypeColor: save.color, text: `${s.reveal || "使い始めて気づいた"}。3つのポイントで全ての問題が解決していた。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `使って3日。気づいたら毎日使っていた。${s.change || "体感で分かった"}。` },
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `1週間後。元に戻れなくなっていた。当たり前が変わっていた。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `使い始めて気づいた。3つのポイントで全ての問題が解決していた。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `使って3日。気づいたら毎日使っていた。体感で分かった。` },
   ], mode);
 
   // S4: 認定理由
   const s4 = applyModeToOptions([
     { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${item.label}　${item.score}点。理由はシンプル。${buzz.theme.text}。これだけでいい。` },
-    { archetype: save.archetype, archetypeColor: save.color, text: `認定${item.score}点の理由。①${s.good || "使いやすさ"} ②長期コスパ ③${cat}選びの基準をクリア。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `正直に言う。${s.good || "使って初めて分かる良さがある"}。俺の体験ベースで${item.score}点。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `認定${item.score}点の理由。①使いやすさ ②長期コスパ ③${cat}選びの基準をクリア。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `正直に言う。使って初めて分かる良さがある。俺の体験ベースで${item.score}点。` },
   ], mode);
 
   // S5: 向いていない人
   const s5 = applyModeToOptions([
-    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `向いていない人を先に言う。${s.ng1 || `こだわりが強すぎる人`}。これが当てはまるなら別を選べ。` },
-    { archetype: save.archetype, archetypeColor: save.color, text: `買う前チェックリスト。✕ ${s.ng1 || "使用頻度が低い"} ✕ ${s.ng2 || "とにかく安さ優先"}。2つ当てはまる人は不要。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺も最初は向いていないと思ってた。でも${s.change || "使って変わった"}。${s.ng1 || `ただし頻度が低い人には不要`}。` },
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `向いていない人を先に言う。こだわりが強すぎる人。これが当てはまるなら別を選べ。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `買う前チェックリスト。✕ 使用頻度が低い ✕ とにかく安さ優先。2つ当てはまる人は不要。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺も最初は向いていないと思ってた。でも使って変わった。ただし頻度が低い人には不要。` },
   ], mode);
 
   // S6: 結論
   const s6 = applyModeToOptions([
-    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${buzz.theme.text}。${s.conclusion || `迷ってる時間が一番もったいない`}。フォローして次の装備も確認して。` },
-    { archetype: save.archetype, archetypeColor: save.color, text: `保存して次に使って。${s.conclusion || `${cat}で迷いたくない人だけ買え`}。リストはプロフィールから。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺の結論。${s.conclusion || follow.theme.text}。体験した人間が言うから信じていい。` },
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${buzz.theme.text}。迷ってる時間が一番もったいない。フォローして次の装備も確認して。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `保存して次に使って。${cat}で迷いたくない人だけ買え。リストはプロフィールから。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `俺の結論。${follow.theme.text}。体験した人間が言うから信じていい。` },
   ], mode);
 
   return [

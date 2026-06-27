@@ -235,16 +235,14 @@ function detectCompetitors(item) {
 // ─── UpGear Score calculator ──────────────────────────────────────────────────
 
 function calcUpGearScore(item) {
-  const s = item.stock || {};
   const baseScore = Number(item.score) || 70;
-  const filled = ["situation","hook","reveal","change","good","ng1","ng2","conclusion"].filter(k => s[k]?.trim()).length;
 
   const equipScore  = baseScore >= 80 ? 18 : baseScore >= 65 ? 14 : 10;
-  const judgScore   = s.change  ? Math.min(20, 14 + Math.floor(s.change.length / 20)) : 12;
+  const judgScore   = baseScore >= 80 ? 18 : baseScore >= 65 ? 15 : 12;
   const contScore   = baseScore >= 80 ? 17 : 13;
   const cospaScore  = item.price ? (Number(item.price) < 5000 ? 14 : Number(item.price) < 15000 ? 12 : 9) : 10;
   const irrepScore  = item.judgment === "認定" ? 13 : item.judgment === "条件付き認定" ? 10 : 7;
-  const satisScore  = filled >= 6 ? 5 : filled >= 4 ? 4 : 3;
+  const satisScore  = baseScore >= 80 ? 5 : baseScore >= 65 ? 4 : 3;
   const longScore   = baseScore >= 80 ? 5 : 4;
 
   return {
@@ -257,19 +255,18 @@ function calcUpGearScore(item) {
 // ─── Differentiation points ───────────────────────────────────────────────────
 
 function genDifferentiation(item) {
-  const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
 
   const points = [
-    `「向いてない人を先に言う」切り口：${s.ng1 ? `「${s.ng1.slice(0,20)}」人は買うな` : `${nick}を勧めない人がいる`}という逆説フック`,
-    `「1年後の自分」視点：買った直後より1年後の変化を語る。「${s.change || `${cat}を選ぶ判断が消えた`}」の体験談`,
-    `「元に戻れない瞬間」型：${s.reveal ? `「${s.reveal.slice(0,25)}」` : "古い環境に戻ったとき気づく"}という露見シーンで維持率を上げる`,
+    `「向いてない人を先に言う」切り口：${nick}を勧めない人がいるという逆説フック`,
+    `「1年後の自分」視点：買った直後より1年後の変化を語る。「${cat}を選ぶ判断が消えた」の体験談`,
+    `「元に戻れない瞬間」型：古い環境に戻ったとき気づくという露見シーンで維持率を上げる`,
     `「判断削減」視点：機能説明ではなく「何個の判断が消えたか」で語る。スペックではなく認知コストの話`,
     `「当事者の広さ」型：${nick}のユーザーは${cat}を使う全員。狭い属性ではなく全デスクワーカーに語りかける`,
     `「コスト逆算」型：${item.price ? `¥${Number(item.price).toLocaleString()}を1日あたりに換算すると¥${Math.round(Number(item.price)/365)}。コスパの語り方を変える` : "1日あたりのコストで語る"}`,
-    `「失敗談から入る」型：${s.situation ? `「${s.situation.slice(0,20)}」という過去の自分` : "安物を買って後悔した話"}から始める共感型`,
-    `「フィルター型CTA」：「${s.conclusion || `${cat}で迷いたくない人だけ買え`}」という排除の文法。保存ではなくフォロー誘導に最適`,
+    `「失敗談から入る」型：安物を買って後悔した話から始める共感型`,
+    `「フィルター型CTA」：「${cat}で迷いたくない人だけ買え」という排除の文法。保存ではなくフォロー誘導に最適`,
     `「SD思想」貫通：商品説明なし。「判断が消えた」「迷わなくなった」という生活変化だけで語り切る`,
     `「競合を名指しせず差別化」型：「普通の${cat}との違い」を比較表ではなく体験の差として語る`,
     `「リピート宣言」型：「同じものをもう一度買う理由」という切り口。耐久性と継続性を証明する`,
@@ -313,7 +310,6 @@ function genPostPlans(item) {
 // ─── Titles ───────────────────────────────────────────────────────────────────
 
 function genTitles(item) {
-  const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
 
@@ -338,8 +334,8 @@ function genTitles(item) {
     `同じものをまた買う理由`,
     `${cat}で判断が減った話`,
     `向いてる人・向いてない人の違い`,
-    s.conclusion ? s.conclusion : `${cat}で迷いたくない人だけ買え`,
-    s.situation  ? `${s.situation.slice(0,18)}…だった話` : `普通の${cat}をやめた理由`,
+    `${cat}で迷いたくない人だけ買え`,
+    `普通の${cat}をやめた理由`,
     `なんでもっと早く教えてくれなかったんだ`,
     `${nick}の正直なデメリット`,
     `コスパで考えたら答えは一つだった`,
@@ -354,23 +350,22 @@ function genTitles(item) {
 // ─── Hooks (30) ──────────────────────────────────────────────────────────────
 
 function genAllHooks(item) {
-  const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
   const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "";
 
-  const hooks = [
+  return [
     { type: "逆張り", text: `まだ普通の${cat}使ってるの？　俺は1年前に決断した` },
     { type: "逆張り", text: `${nick}　買わなくていい人がいる` },
     { type: "逆張り", text: `正直いらんと思ってた　でも今は毎日使ってる` },
     { type: "逆張り", text: `${price ? `${price}` : "この値段"}出す前に見て　後悔するパターンがある` },
     { type: "逆張り", text: `向いてない人を先に言う。これが当てはまるなら買うな` },
-    s.hook ? { type: "体験", text: s.hook, fromStock: true } : { type: "体験", text: `俺が${nick}を選んだ理由` },
+    { type: "体験", text: `俺が${nick}を選んだ理由` },
     { type: "体験", text: `${nick}を半年使って正直に言う` },
     { type: "体験", text: `買ってから毎日使ってる　それだけで答えは出てる` },
     { type: "体験", text: `最初は半信半疑だった　使って3日で確信した` },
-    s.situation ? { type: "体験", text: `${s.situation.slice(0,25)}…　その日から変わった`, fromStock: true } : { type: "体験", text: `1年前の俺に教えてやりたい` },
-    s.reveal    ? { type: "体験", text: `${s.reveal.slice(0,25)}…　その瞬間気づいた`, fromStock: true } : { type: "体験", text: `元に戻れなくなった話をする` },
+    { type: "体験", text: `1年前の俺に教えてやりたい` },
+    { type: "体験", text: `元に戻れなくなった話をする` },
     { type: "共感", text: `${cat}選びで5分以上迷ったことある？` },
     { type: "共感", text: `毎朝同じ悩みを繰り返してた` },
     { type: "共感", text: `なんでもっと早く気づかなかったんだろ` },
@@ -380,10 +375,8 @@ function genAllHooks(item) {
     { type: "チェック", text: `${nick}を買う前に確認しろ　後悔するパターンがある` },
     { type: "チェック", text: `買う前に3つだけ確認して` },
     { type: "チェック", text: `向いてない人の特徴を先に言う` },
-    s.conclusion ? { type: "チェック", text: s.conclusion, fromStock: true } : { type: "チェック", text: `${cat}で迷いたくない人だけ読め` },
+    { type: "チェック", text: `${cat}で迷いたくない人だけ読め` },
   ];
-
-  return hooks.filter(Boolean);
 }
 
 // ─── CTAs ────────────────────────────────────────────────────────────────────
@@ -391,7 +384,6 @@ function genAllHooks(item) {
 function genCTAs(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const s = item.stock || {};
 
   const saves = [
     `保存して${cat}を買う前に確認して`,
@@ -401,7 +393,7 @@ function genCTAs(item) {
     `次に${cat}を買うときのために保存`,
     `このチェックリスト　保存必須`,
     `${cat}を買う前に保存して読み返して`,
-    s.conclusion ? `${s.conclusion}　保存して確認して` : `保存して読み返して`,
+    `保存して読み返して`,
     `決める前に保存してもう一度見て`,
     `迷ってる人はとりあえず保存して`,
   ];
@@ -592,7 +584,6 @@ export function genPostStrategy(item) {
 // ─── ⑪ Detailed Script (6 slides × 3 archetypes) ─────────────────────────────
 
 function genScriptForArchetype(item, archetype) {
-  const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
 
@@ -606,36 +597,36 @@ function genScriptForArchetype(item, archetype) {
         dropPrevention: "「まだ〜してるの？」の問いかけが「自分のこと？」という反射を生む",
         basis: "逆張り構文は2枚目維持率が平均より35%高い（006-B型実証）" },
       { slideNum: 2, role: "before（2枚目）",
-        displayText: s.situation || `普通の${cat}で毎日消耗していた。それが当たり前だと思っていた。`,
-        narration: `${s.situation || `普通の${cat}を毎日使ってた。それが当たり前だと思ってた。`}`,
+        displayText: `普通の${cat}で毎日消耗していた。それが当たり前だと思っていた。`,
+        narration: `普通の${cat}を毎日使ってた。それが当たり前だと思ってた。`,
         imageIdea: "暗めのデスク環境。ストレスを感じている様子",
         goal: "共感を生む。「自分もそうだ」と思わせる",
         dropPrevention: "「当たり前だと思っていた」で読者の過去に共鳴させる",
         basis: "before型の共感シーンは離脱率を下げる効果が実証されている" },
       { slideNum: 3, role: "露見シーン（3枚目）",
-        displayText: s.reveal || `1ヶ月後。元に戻れなくなっていた。当たり前が変わっていた。`,
-        narration: `${s.reveal || `1ヶ月後、以前のに戻ろうとして気づいた。元に戻れなくなってた。`}`,
+        displayText: `1ヶ月後。元に戻れなくなっていた。当たり前が変わっていた。`,
+        narration: `1ヶ月後、以前のに戻ろうとして気づいた。元に戻れなくなってた。`,
         imageIdea: "鮮明な現在の環境。変化の瞬間を表現",
         goal: "「どう変わったか」の好奇心で4枚目に引っ張る",
         dropPrevention: "「元に戻れなくなった」の断言が「なぜ？」を引き出す",
         basis: "露見シーンの体験密度が高いほど後続スライドの維持率が上がる" },
       { slideNum: 4, role: "認定理由（4枚目）",
-        displayText: `${item.label}　${item.score}点。${(s.good || "使って初めて分かる良さがある").slice(0,40)}。`,
-        narration: `${item.label}に${item.score}点つけた理由。${(s.good || `毎日使うものだから良いものを選べ`).slice(0,40)}`,
+        displayText: `${item.label}　${item.score}点。使って初めて分かる良さがある。`,
+        narration: `${item.label}に${item.score}点つけた理由。毎日使うものだから良いものを選べ。`,
         imageIdea: "商品写真 or スコア大きく表示",
         goal: "信頼性を確立。スコアと根拠で購入検討を加速",
         dropPrevention: "具体的なスコアが「根拠がある評価」という信頼感を生む",
         basis: "具体的スコア＋理由の組み合わせがコメント率を上げる" },
       { slideNum: 5, role: "向いていない人（5枚目）",
-        displayText: `向いていない人を先に言う。${s.ng1 || `こだわりが強すぎる人`}。これが当てはまるなら別を選べ。`,
-        narration: `向いてない人を正直に言う。${s.ng1 || `こだわりが強すぎる人`}。これが当てはまるなら買わなくていい。`,
+        displayText: `向いていない人を先に言う。こだわりが強すぎる人。これが当てはまるなら別を選べ。`,
+        narration: `向いてない人を正直に言う。こだわりが強すぎる人。これが当てはまるなら買わなくていい。`,
         imageIdea: "✕マーク付きテキスト。NG条件を箇条書き",
         goal: "信頼を上げる。「この人は正直だ」という印象を強化",
         dropPrevention: "「正直に言う」「買わなくていい」の逆説的誠実さがフォローを促す",
         basis: "向いていない人提示は信頼訴求としてフォロー率最大化に貢献" },
       { slideNum: 6, role: "結論（6枚目）",
-        displayText: s.conclusion || `${cat}で迷いたくない人だけ買え。保存して次の装備はプロフィールから。`,
-        narration: `結論。${s.conclusion || `${cat}で迷いたくない人だけ買え`}。フォローしてプロフィールから確認して。`,
+        displayText: `${cat}で迷いたくない人だけ買え。保存して次の装備はプロフィールから。`,
+        narration: `結論。${cat}で迷いたくない人だけ買え。フォローしてプロフィールから確認して。`,
         imageIdea: "シンプルテキスト。結論を大きく。プロフィールへのCTA",
         goal: "保存・フォローを促す。購入判断を後押し",
         dropPrevention: "断定的な結論がCTA前の迷いをなくす",
@@ -653,7 +644,7 @@ function genScriptForArchetype(item, archetype) {
         dropPrevention: "「後悔するパターン」という損失回避フレームが保存をトリガーする",
         basis: "「確認しろ」系フックは保存率がその他の3倍" },
       { slideNum: 2, role: "向いていない人チェック（2枚目）",
-        displayText: `✕ ${s.ng1 || "使用頻度が低い人"}\n✕ ${s.ng2 || "とにかく安さ優先の人"}\n✕ すでに同等品を持っている人`,
+        displayText: `✕ 使用頻度が低い人\n✕ とにかく安さ優先の人\n✕ すでに同等品を持っている人`,
         narration: `まず向いてない人から。この3つに当てはまる人は買わなくていい。`,
         imageIdea: "✕チェックリスト。NG条件を明示",
         goal: "読者の自己診断を促す",
@@ -667,7 +658,7 @@ function genScriptForArchetype(item, archetype) {
         dropPrevention: "「自分は当てはまる」という確認欲求で保存を促す",
         basis: "向いている人の明示で購入検討率が上がる" },
       { slideNum: 4, role: "認定理由（4枚目）",
-        displayText: `認定理由3つ\n① ${(s.good || "毎日使えるコスパ").slice(0,30)}\n② 長期的な価値がある\n③ 買い直し不要`,
+        displayText: `認定理由3つ\n① 毎日使えるコスパの良さ\n② 長期的な価値がある\n③ 買い直し不要`,
         narration: `${nick}を認定した理由を3つ言う。`,
         imageIdea: "番号付きリスト。シンプルで読みやすいレイアウト",
         goal: "決断の根拠を与える",
@@ -700,14 +691,14 @@ function genScriptForArchetype(item, archetype) {
       dropPrevention: "「正直に言う」「全部話す」が「本当のことを知りたい」という欲求を刺激",
       basis: "「正直」「全部言う」構文はフォロー率が最も高い" },
     { slideNum: 2, role: "良い点（2枚目）",
-      displayText: `良かった点\n・${(s.good || "毎日使えるコスパの良さ").slice(0,35)}\n・元に戻れないレベルの使いやすさ\n・${(s.change || "気づいたら毎日使っていた").slice(0,35)}`,
+      displayText: `良かった点\n・毎日使えるコスパの良さ\n・元に戻れないレベルの使いやすさ\n・気づいたら毎日使っていた`,
       narration: `まず良かった点から。正直に言う。`,
       imageIdea: "緑のプラスマーク。良い点を箇条書き",
       goal: "バランスの取れた評価者として信頼を確立",
       dropPrevention: "「良い点から入る正直レビュー」が「悪い点も聞きたい」と引き込む",
       basis: "両面提示が信頼訴求に最も効果的" },
     { slideNum: 3, role: "悪い点（3枚目）",
-      displayText: `正直な悪い点\n・${(s.ng1 || "向いていない人がいる").slice(0,35)}\n・慣れるまでに時間がかかる場合も\n・これを知らずに買うと後悔する`,
+      displayText: `正直な悪い点\n・向いていない人がいる\n・慣れるまでに時間がかかる場合も\n・これを知らずに買うと後悔する`,
       narration: `次に悪い点。ここが一番重要。`,
       imageIdea: "赤のマイナスマーク。悪い点を正直に",
       goal: "「この人は正直だ」という強い信頼を形成",
@@ -787,7 +778,6 @@ export function genPrePostStrategy(item) {
 // ─── ⑯ Evidence Blocks ────────────────────────────────────────────────────────
 
 export function genEvidenceBlocks(item) {
-  const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
 
@@ -797,7 +787,7 @@ export function genEvidenceBlocks(item) {
       facts: [
         `${cat}カテゴリの対象ユーザーは通勤者・デスクワーカーなど広い層を含む`,
         `SNS分析でGEAR系は「全デスクワーカー」が当事者になるテーマが最多再生`,
-        s.situation ? `ストックデータ: 「${s.situation.slice(0,40)}」という状況に共感する人が多い` : "ストックデータ未入力（状況欄の記入で精度が上がる）",
+        `カテゴリ全体で「毎日使う人」「仕事効率化を求める人」が最も当事者が広い`,
       ],
       analysis: [
         "当事者が広いほど非フォロワー配信率が上がり、初投稿でも再生が広がる",
@@ -823,16 +813,16 @@ export function genEvidenceBlocks(item) {
     {
       topic: "口コミ傾向と投稿への活用",
       facts: [
-        s.good ? `ストックデータ（良い点）: 「${s.good.slice(0,40)}」という評価あり` : "ストックデータ未入力（良い点の記入で精度が上がる）",
-        s.ng1  ? `ストックデータ（NG）: 「${s.ng1.slice(0,40)}」という不満あり` : "ストックデータ未入力（向いてない人の記入で精度が上がる）",
-        `カテゴリ全体で「毎日使えるか」「元に戻れない」系の評価が多い`,
+        `${cat}カテゴリの口コミで「毎日使えるか」「元に戻れない」系の評価が最多`,
+        "使い続けた体験談が最も信頼を生む——スペック説明より体験の言葉が響く",
+        "「買って後悔した話」よりも「買ってよかった理由が分かった話」が拡散されやすい",
       ],
       analysis: [
         "使い続けた体験談が最も信頼を生む——スペック説明より体験の言葉を使う",
         "「最初は慣れなかったが」というbeforeシーンが共感を生む",
         "NGポイントを先に提示することで信頼度が上がり、適合者の購入意欲が高まる",
       ],
-      basis: ["口コミ分析", "レビューデータベース", "ストックデータ"],
+      basis: ["口コミ分析", "レビューデータベース", "カテゴリ別傾向データ"],
     },
     {
       topic: "競合との差別化ポイント",
@@ -877,7 +867,6 @@ function fillKeywords(list, item) {
 
 export function runMarketResearch(item) {
   const cat = item.category || "GEAR";
-  const s = item.stock || {};
   const reviewDB = REVIEW_DB[cat] || REVIEW_DB.GEAR;
   const snsDB = SNS_DB[cat] || SNS_DB.GEAR;
   const searchDB = SEARCH_KEYWORDS_DB[cat] || SEARCH_KEYWORDS_DB.GEAR;
@@ -902,19 +891,18 @@ export function runMarketResearch(item) {
       score: item.score,
       judgment: item.judgment,
       priceRange: item.price ? (Number(item.price) < 5000 ? "低価格帯" : Number(item.price) < 15000 ? "ミドルレンジ" : "高価格帯") : "不明",
-      features: s.good || "ストックデータに記入してください",
-      stockFilled: ["situation","hook","reveal","change","good","ng1","ng2","conclusion"].filter(k => s[k]?.trim()).length,
+      features: REVIEW_DB[cat]?.good?.[0] || "毎日使うものだから良いものを選ぶべき",
       position: `${cat}カテゴリ内の${item.judgment}アイテム。スコア${item.score}点。`,
     },
     // ② 口コミ分析
     reviews: {
-      good: [...(s.good ? [`（ストック）${s.good.slice(0,50)}`] : []), ...reviewDB.good],
-      bad: [...(s.ng1 ? [`（ストック）${s.ng1.slice(0,40)}`] : []), ...(s.ng2 ? [`（ストック）${s.ng2.slice(0,40)}`] : []), ...reviewDB.bad],
-      buyReasons: [...(s.situation ? [`（ストック）${s.situation.slice(0,40)}`] : []), ...reviewDB.buyReasons],
+      good: reviewDB.good,
+      bad: reviewDB.bad,
+      buyReasons: reviewDB.buyReasons,
       regrets: reviewDB.regrets,
       repeatRate: ripRate,
       satisfiedProfile: targetDB.buyMotivation[0] + "人。" + targetDB.lifestyle.slice(0,30),
-      unsuitedProfile: s.ng1 || targetDB.dontBuy[0],
+      unsuitedProfile: targetDB.dontBuy[0],
       frequentWords: [`毎日使える`, `元に戻れない`, `買ってよかった`, `正直`, `コスパ`, `後悔`],
       faq: fillKeywords(searchDB.beforeBuy, item).concat(reviewDB.faq || []),
       improvement: reviewDB.improvementRequests,

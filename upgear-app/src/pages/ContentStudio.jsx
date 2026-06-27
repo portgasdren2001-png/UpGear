@@ -369,26 +369,6 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           ))}
         </div>
 
-        {/* Stock preview */}
-        {item?.stock && (
-          <div style={{ marginTop: 12, background: "var(--bg3)", border: "1px solid var(--border)", padding: "10px 12px" }}>
-            <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>
-              ストックデータ — {["situation","hook","reveal","change","good","ng1","ng2","conclusion"].filter(k => item.stock[k]?.trim()).length}/8 入力済み
-            </div>
-            {[
-              { key: "situation", label: "状況" },
-              { key: "hook",      label: "フック" },
-              { key: "conclusion",label: "結論" },
-            ].map(({ key, label }) => (
-              <div key={key} style={{ display: "flex", gap: 8, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", width: 40, flexShrink: 0 }}>{label}</div>
-                <div style={{ fontSize: 11, color: item.stock[key] ? "var(--text)" : "#50545e", lineHeight: 1.4 }}>
-                  {item.stock[key] || "（未入力）"}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </Card>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -734,7 +714,6 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           <ScoreDim label="バズ型フック" score={snsAnalysis.breakdown.buzz} max={25} />
           <ScoreDim label="保存されやすさ" score={snsAnalysis.breakdown.saves} max={20} />
           <ScoreDim label="TikTok適合度" score={snsAnalysis.breakdown.tiktok} max={15} />
-          <ScoreDim label="ストック充実度" score={snsAnalysis.breakdown.stock} max={10} />
 
           {snsAnalysis.issues.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -821,7 +800,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
         <PageHeader
           title="コンテンツ制作スタジオ"
-          sub={`UpGear v4.6 — ${item?.label ?? "—"} / ストック ${item?.stock ? Object.values(item.stock).filter(v => v?.trim()).length : 0}/8`}
+          sub={`UpGear v4.6 — ${item?.label ?? "—"}`}
         />
         <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 4 }}>
           {(recommendations.length > 0 || researchPanelData) && (
