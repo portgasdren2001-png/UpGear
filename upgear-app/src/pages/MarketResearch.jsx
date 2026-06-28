@@ -2,6 +2,7 @@ import { useState } from "react";
 import { PageHeader, Card, CardTitle, Tag, Btn } from "../components/ui";
 import { runMarketResearch, getLearningInsights } from "../data/marketResearchAI";
 import { generateProductCard } from "../data/productCard";
+import { generateProductUnderstanding } from "../data/productUnderstandingAI";
 
 /* ─── Shared primitives ──────────────────────────────────────────────────────── */
 
@@ -139,11 +140,17 @@ export default function MarketResearch({ data, learningData, onApplyToStudio }) 
   const item = items.find((i) => i.id === selectedItemId) ?? items[0];
   const insights = getLearningInsights(learningData);
 
+  // Use existing card from item if available, else generate
+  const existingCard = item?.card;
+  const understandingScore = existingCard?.understandingScore ?? null;
+
   const run = () => {
     if (!item) return;
     setRunning(true);
     setTimeout(() => {
-      setCard(generateProductCard(item));
+      // Use rich card from 商品理解AI if available, fall back to productCard
+      const richCard = existingCard || generateProductUnderstanding(item);
+      setCard({ ...generateProductCard(item), ...richCard });
       setResearch(runMarketResearch(item));
       setRunning(false);
       setActiveTab("product");
@@ -639,18 +646,39 @@ export default function MarketResearch({ data, learningData, onApplyToStudio }) 
             </select>
           </div>
 
-          {/* URL status */}
-          {item?.urls && Object.values(item.urls).some(Boolean) && (
-            <div style={{ fontSize: 11, color: "var(--text-dim)", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#98c379", display: "inline-block" }} />
-              URL {Object.values(item.urls).filter(Boolean).length}件 登録済み
-            </div>
-          )}
+          {/* Understanding score badge */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {understandingScore != null ? (
+              <div style={{ fontSize: 11, color: understandingScore >= 90 ? "#98c379" : understandingScore >= 70 ? "var(--accent)" : "#e06c75", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: understandingScore >= 90 ? "#98c379" : understandingScore >= 70 ? "var(--accent)" : "#e06c75", display: "inline-block" }} />
+                商品理解 {understandingScore}点
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>商品理解: 未実行</div>
+            )}
+            {item?.urls && Object.values(item.urls).some(Boolean) && (
+              <div style={{ fontSize: 10, color: "#6fa8dc" }}>
+                URL {Object.values(item.urls).filter(Boolean).length}件
+              </div>
+            )}
+          </div>
 
           <Btn variant="primary" onClick={run} disabled={running || !item}>
             {running ? "分析中..." : "市場調査を実行"}
           </Btn>
         </div>
+
+        {/* Understanding score warning */}
+        {understandingScore != null && understandingScore < 90 && (
+          <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(255,107,0,0.06)", border: "1px solid rgba(255,107,0,0.3)", fontSize: 11, color: "var(--text-dim)" }}>
+            ⚠ 商品理解スコア {understandingScore}点 — ストック画面でウィザードを実行すると精度が向上します（90点以上推奨）
+          </div>
+        )}
+        {understandingScore == null && (
+          <div style={{ marginTop: 12, padding: "8px 12px", background: "var(--bg2)", border: "1px solid var(--border)", fontSize: 11, color: "var(--text-dim)" }}>
+            ◎ ストック画面で「商品理解AI」を実行すると、より精度の高い市場調査が可能になります
+          </div>
+        )}
       </Card>
 
       {/* スティッキーサマリー */}
