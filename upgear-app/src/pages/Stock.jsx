@@ -62,9 +62,18 @@ ${s.ng2}
 ${s.conclusion}`;
 }
 
+const URL_FIELDS = [
+  { key: "official", label: "公式サイト URL",      placeholder: "https://..." },
+  { key: "amazon",   label: "Amazon URL",          placeholder: "https://amazon.co.jp/dp/..." },
+  { key: "rakuten",  label: "楽天 URL",             placeholder: "https://item.rakuten.co.jp/..." },
+  { key: "kakaku",   label: "価格.com URL",         placeholder: "https://kakaku.com/item/..." },
+  { key: "review",   label: "レビューサイト URL",   placeholder: "https://..." },
+];
+
 const BLANK_ITEM = {
   id: "", no: "", label: "", category: "GEAR", score: 80,
   price: "", judgment: "認定",
+  urls: { official: "", amazon: "", rakuten: "", kakaku: "", review: "" },
   stock: { situation: "", hook: "", reveal: "", change: "", good: "", ng1: "", ng2: "", conclusion: "" },
 };
 
@@ -108,6 +117,9 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
 
   const setStock = (key, val) =>
     setForm((f) => ({ ...f, stock: { ...f.stock, [key]: val } }));
+
+  const setUrl = (key, val) =>
+    setForm((f) => ({ ...f, urls: { ...(f.urls || {}), [key]: val } }));
 
   return (
     <div>
@@ -187,6 +199,40 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
                 <Input label="価格（円）" value={form.price} onChange={(v) => setForm((f) => ({ ...f, price: v }))} disabled={!editing} />
                 <Select label="認定種別" value={form.judgment} onChange={(v) => setForm((f) => ({ ...f, judgment: v }))} options={JUDGMENT_OPTIONS} disabled={!editing} />
               </Grid>
+
+              <Divider />
+
+              {/* 参照URL */}
+              <CardTitle>参照URL（市場調査AIで使用 / Phase 2で自動取得）</CardTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
+                {URL_FIELDS.map((f) => {
+                  const val = form.urls?.[f.key] || "";
+                  const hasVal = Boolean(val);
+                  return (
+                    <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{
+                        width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                        background: hasVal ? "#98c379" : "var(--border)",
+                      }} />
+                      <div style={{ flex: 1 }}>
+                        <Input
+                          label={f.label}
+                          value={val}
+                          onChange={(v) => setUrl(f.key, v)}
+                          disabled={!editing}
+                          placeholder={editing ? f.placeholder : "（未設定）"}
+                          small
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {!editing && (
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4 }}>
+                    ● 設定済み / ○ 未設定　　Phase 2でPlaywrightが自動取得します
+                  </div>
+                )}
+              </div>
 
               <Divider />
 
