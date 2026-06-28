@@ -90,7 +90,7 @@ function detectSubCategory(label = "", cat = "GEAR") {
   for (const sub of db.subCategories) {
     if (label.toLowerCase().includes(sub.toLowerCase())) return sub;
   }
-  return db.subCategories[0];
+  return null;
 }
 
 // ─── Category determination (priority chain) ─────────────────────────────────
@@ -147,9 +147,9 @@ export function generateProductUnderstanding(item) {
   // Category determination chain
   const catFromUrl = determineCategoryFromUrls(urls);
   const catFromBrand = inferredCat;
-  const catFromItem = item.category;
-  const finalCat = catFromItem || catFromUrl.cat || catFromBrand || "GEAR";
-  const catSource = catFromItem ? "ユーザー設定" : catFromUrl.cat ? catFromUrl.source : catFromBrand ? "ブランドDB" : "AI推論";
+  const catFromUrl2 = catFromUrl.cat;
+  const finalCat = catFromUrl2 || catFromBrand || "GEAR";
+  const catSource = catFromUrl2 ? catFromUrl.source : catFromBrand ? "ブランドDB" : "AI推論";
 
   const db = CAT_DB[finalCat] || CAT_DB.GEAR;
   const subCat = detectSubCategory(label, finalCat);

@@ -324,17 +324,8 @@ function Step2({ urls, item, onComplete, onBack }) {
     };
 
     const runFallback = () => {
-      // Fallback to local heuristics when server is unavailable
-      REAL_STAGES.forEach(s => setStage(s.id, "running"));
-      addLog("サーバー未起動 — ローカル推論モードで実行");
-      setTimeout(() => {
-        if (cancelled) return;
-        REAL_STAGES.forEach(s => setStage(s.id, "done"));
-        const generatedCard = generateProductUnderstanding({ ...item, urls });
-        setCard(generatedCard);
-        setConfidence(50);
-        setDone(true);
-      }, 2000);
+      // Server is required — show a blocking error instead of faking results
+      setError("バックエンドサーバーが起動していません。\n`cd server && node index.js` を実行してから再試行してください。");
     };
 
     runReal();
@@ -855,7 +846,7 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
         {step === 2 && (
           <Step2
             urls={urls}
-            item={existingItem || { label: "", category: "GEAR", score: 70, price: "", judgment: "保留" }}
+            item={existingItem || { label: "", score: 70, price: "", judgment: "保留" }}
             onComplete={handleStep2Complete}
             onBack={() => setStep(1)}
           />

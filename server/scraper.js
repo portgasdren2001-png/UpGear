@@ -19,9 +19,8 @@ let browserInstance = null;
 
 async function getBrowser() {
   if (browserInstance) return browserInstance;
-  const { chromium } = await import(
-    '../upgear-app/node_modules/playwright-core/index.js'
-  );
+  const pwModule = await import('../upgear-app/node_modules/playwright-core/index.js');
+  const { chromium } = pwModule.default ?? pwModule;
   const launchArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
