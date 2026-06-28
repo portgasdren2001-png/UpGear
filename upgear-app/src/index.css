@@ -5,10 +5,12 @@ body {
   color: #e8eaf0;
   font-family: "Meiryo", "メイリオ", "Hiragino Kaku Gothic ProN", sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 #root {
   width: 100%;
+  overflow-x: hidden;
 }
 
 ::-webkit-scrollbar {

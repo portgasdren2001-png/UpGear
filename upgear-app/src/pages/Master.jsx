@@ -1,54 +1,121 @@
-import { PageHeader, Card, CardTitle, Tag, Divider } from "../components/ui";
-import { likeRate, typeSummary, seriesSummary, typeOf } from "../utils/calc";
+import { useState } from "react";
+import { PageHeader, Card, CardTitle, Tag, Btn } from "../components/ui";
+import { likeRate, typeSummary, seriesSummary } from "../utils/calc";
+import { generateMasterVersion, diffMasterVersions } from "../data/masterAI";
 
 const TYPE_COLOR = { A: "blue", B: "orange", C: "green" };
 const J_COLOR = { "認定": "orange", "条件付き認定": "blue", "保留": "gray", "非認定": "gray" };
 
-const COPY_RULES = [
-  { title: "フック型（1枚目）の設計", items: [
-    "読者が誰でも持っている日用品を名指しし、それを使い続ける前提に問いを投げる",
-    "サブ見出し＝読者の当たり前の対象を名指し",
-    "メイン見出し＝否定でも命令でもなく問いにする",
-    "補足＝一人称の過去断言で好奇心ギャップを作る",
-    "1枚目に商品名は出さない。問題・対象から入る",
-  ]},
-  { title: "文体ルール", items: [
-    "短文・断言・体言止めを基本にする",
-    "旧状態は過去形で書き、今の自分と距離を取る",
-    "一人称「俺」を全スライド貫通する",
-    "機能説明・スペック羅列をしない。身体感覚・場面のディテールで書く",
-  ]},
-  { title: "B型（逆張り）設計原則", items: [
-    "中盤3段：before（身体感覚）→露見シーン→定義（体験を抽象化）",
-    "SD思想は最後に体験から導く。先に説明しない",
-    "商品名は5枚目まで完全に伏せる",
-    "締め文：次の投稿で続きを話す",
-  ]},
-  { title: "C型（保存型）設計原則", items: [
-    "フック型をそのまま確定フォーミュラとして使う",
-    "保存動機ワードを2枚目以内に必ず入れる",
-    "チェック・基準・リスト要素を1枚以上",
-    "締め文：保存して買う前に確認しろ",
-  ]},
-];
+const DIFF_COLORS = { add: "#98c379", remove: "#e06c75", up: "#98c379", down: "#e06c75", change: "var(--accent)", none: "var(--text-dim)" };
 
-const INSIGHTS = [
-  { label: "006-B成功パターン", text: "B型×一人称×逆張りフック。「普通のマウスをまだ使う理由があるか　俺は1年前に捨てた」で10,700再生。非フォロワー100%配信達成。" },
-  { label: "アイテムの当事者の広さ", text: "マウス（全デスクワーカー）>バッグ（通勤者）>イヤホン（外出者）。当事者の広さが再生数の天井を決める。" },
-  { label: "004シリーズの失敗", text: "思想説明を1枚目に置いたため2枚目維持率が3%。思想は体験から導く。先に説明しない。" },
-  { label: "006-C異常データ", text: "2枚目維持率100%・最終到達率0%。2枚目で全員離脱。スライド2の設計問題として要検証。" },
-];
+function DiffBadge({ type, label, value }) {
+  const icon = { add: "＋", remove: "－", up: "↑", down: "↓", change: "⇄", none: "＝" }[type] || "•";
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ color: DIFF_COLORS[type], fontSize: 12, width: 16, flexShrink: 0 }}>{icon}</span>
+      <span style={{ fontSize: 11, color: "var(--text-dim)", width: 100, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, color: DIFF_COLORS[type] }}>{value}</span>
+    </div>
+  );
+}
 
-export default function Master({ data }) {
+function VersionCard({ version, isLatest, onSelect, selected }) {
+  const d = new Date(version.ts);
+  const dateStr = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return (
+    <button onClick={onSelect} style={{
+      width: "100%", background: selected ? "var(--accent-dim)" : "var(--bg2)",
+      border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+      padding: "10px 14px", cursor: "pointer", textAlign: "left",
+      fontFamily: "var(--font-mono)", marginBottom: 6,
+      display: "flex", alignItems: "center", gap: 10,
+    }}>
+      <span style={{ fontSize: 12, color: selected ? "var(--accent)" : "var(--text)", fontWeight: 700, flex: 1 }}>
+        {version.version}
+        {isLatest && <span style={{ marginLeft: 8, fontSize: 9, color: "var(--accent)", background: "var(--accent-dim)", padding: "1px 5px" }}>LATEST</span>}
+      </span>
+      <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{dateStr}</span>
+      <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{version.summary.totalPosts}本 / 認定{version.summary.certifiedItems}件</span>
+    </button>
+  );
+}
+
+export default function Master({ data, learningData, masterStore, addMasterVersion, latestMasterVersion }) {
   const { items, posts } = data;
+  const [generating, setGenerating] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [showDiff, setShowDiff] = useState(false);
+
+  const versions = masterStore?.versions || [];
+  const latest = latestMasterVersion;
+  const prev = versions.length >= 2 ? versions[versions.length - 2] : null;
+
+  const displayed = selectedIdx !== null ? versions[selectedIdx] : latest;
+  const diffData = prev && latest ? diffMasterVersions(prev, latest) : [];
+
+  const handleGenerate = () => {
+    setGenerating(true);
+    setTimeout(() => {
+      const newVer = generateMasterVersion(data, learningData, latest?.version);
+      addMasterVersion(newVer);
+      setSelectedIdx(null);
+      setShowDiff(true);
+      setGenerating(false);
+    }, 800);
+  };
+
   const typeData = typeSummary(posts);
   const seriesData = seriesSummary(posts);
 
   return (
     <div>
-      <PageHeader title="マスター" sub="UpGear v4.6 — 設計ルール・認定アイテム・データサマリー" />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+        <PageHeader
+          title="マスター"
+          sub={latest ? `${latest.version} — AI知識ベース自動更新 / ${new Date(latest.ts).toLocaleDateString("ja-JP")}` : "UpGear v5.0 — AI知識ベース"}
+        />
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {versions.length >= 2 && (
+            <Btn small onClick={() => setShowDiff((v) => !v)} style={{ borderColor: showDiff ? "var(--accent)" : undefined }}>
+              差分表示 {prev?.version}→{latest?.version}
+            </Btn>
+          )}
+          <Btn onClick={handleGenerate} disabled={generating}>
+            {generating ? "生成中..." : "最新マスターを生成"}
+          </Btn>
+        </div>
+      </div>
 
-      {/* 思想 */}
+      {/* 差分表示 */}
+      {showDiff && diffData.length > 0 && (
+        <Card style={{ marginBottom: 16, borderLeft: "3px solid var(--accent)" }}>
+          <CardTitle>{prev?.version} → {latest?.version} 差分</CardTitle>
+          {diffData.map((d, i) => <DiffBadge key={i} {...d} />)}
+        </Card>
+      )}
+
+      {/* バージョン履歴 */}
+      {versions.length > 0 && (
+        <Card style={{ marginBottom: 16 }}>
+          <CardTitle>バージョン履歴（{versions.length}件）</CardTitle>
+          <div>
+            {[...versions].reverse().map((v, i) => {
+              const origIdx = versions.length - 1 - i;
+              return (
+                <VersionCard
+                  key={v.version}
+                  version={v}
+                  isLatest={origIdx === versions.length - 1}
+                  selected={selectedIdx === origIdx}
+                  onSelect={() => setSelectedIdx(selectedIdx === origIdx ? null : origIdx)}
+                />
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* ミッション（常に表示） */}
       <Card style={{ marginBottom: 16, borderLeft: "3px solid var(--accent)" }}>
         <CardTitle>UpGear ミッション</CardTitle>
         <div style={{ fontSize: 16, color: "var(--text)", lineHeight: 1.8, fontFamily: "Georgia, serif" }}>
@@ -57,108 +124,172 @@ export default function Master({ data }) {
         </div>
         <div style={{ marginTop: 12, fontSize: 12, color: "var(--text-dim)", lineHeight: 1.8 }}>
           <span style={{ color: "var(--accent)" }}>SD思想（Silent Delegation）</span>：
-          人間の判断能力には構造的な限界がある。判断の重さを静かに代替する設計思想。<br />
-          読み終えたとき「迷っていない状態」になっている。それがUpGearの成功。
+          人間の判断能力には構造的な限界がある。判断の重さを静かに代替する設計思想。
         </div>
       </Card>
 
-      {/* 認定アイテム */}
-      <Card style={{ marginBottom: 16 }}>
-        <CardTitle>認定済みアイテム一覧</CardTitle>
-        {["認定", "条件付き認定", "保留"].map((j) => {
-          const group = items.filter((i) => i.judgment === j);
-          if (!group.length) return null;
-          return (
-            <div key={j} style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.15em", marginBottom: 8 }}>{j.toUpperCase()}</div>
-              {group.map((item) => (
-                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
-                  <Tag color={J_COLOR[item.judgment]}>{item.score}点</Tag>
-                  <Tag color={item.category === "GEAR" ? "gray" : item.category === "SHOES" ? "blue" : "green"}>{item.category}</Tag>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12 }}>No.{item.no}　{item.label}</div>
-                    {item.stock.conclusion && (
-                      <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 2 }}>→「{item.stock.conclusion}」</div>
-                    )}
+      {displayed ? (
+        <>
+          {/* AI生成サマリー */}
+          <Card style={{ marginBottom: 16 }}>
+            <CardTitle>パフォーマンスサマリー — {displayed.version}</CardTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 16 }}>
+              {[
+                ["総投稿数", `${displayed.summary.totalPosts}本`],
+                ["平均再生数", `${displayed.summary.avgViews.toLocaleString()}`],
+                ["平均いいね率", `${displayed.summary.avgLikeRate}%`],
+                ["フォロワー", `${displayed.summary.followers}`],
+                ["認定", `${displayed.summary.certifiedItems}件`],
+                ["ストック", `${displayed.summary.totalItems}件`],
+              ].map(([label, val]) => (
+                <div key={label} style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px" }}>
+                  <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.15em", marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700 }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            {displayed.topPost && (
+              <div style={{ background: "rgba(255,107,0,0.06)", border: "1px solid var(--accent)", padding: "10px 14px" }}>
+                <span style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em" }}>最高再生 — No.{displayed.topPost.no}</span>
+                <div style={{ fontSize: 12, marginTop: 4 }}>「{displayed.topPost.hook?.slice(0, 40)}」</div>
+                <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>{displayed.topPost.views?.toLocaleString()} 再生</div>
+              </div>
+            )}
+          </Card>
+
+          {/* AI生成ルール */}
+          {displayed.rules?.length > 0 && (
+            <Card style={{ marginBottom: 16 }}>
+              <CardTitle>コピー設計ルール（AI自動更新）</CardTitle>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
+                {displayed.rules.map((r) => (
+                  <div key={r.title}>
+                    <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>{r.title}</div>
+                    {r.items.map((item, i) => (
+                      <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0", display: "flex", gap: 6 }}>
+                        <span style={{ color: "var(--border)" }}>—</span>
+                        {item}
+                      </div>
+                    ))}
                   </div>
-                  {item.price && (
-                    <div style={{ fontSize: 11, color: "var(--text-dim)" }}>¥{Number(item.price).toLocaleString()}</div>
-                  )}
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* AI示唆 */}
+          {displayed.insights?.length > 0 && (
+            <Card style={{ marginBottom: 16 }}>
+              <CardTitle>データからの示唆（AI分析）</CardTitle>
+              {displayed.insights.map((ins) => (
+                <div key={ins.label} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 10, color: "var(--accent)", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>■ {ins.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>{ins.text}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {/* 認定アイテム */}
+          {(displayed.certified?.length > 0 || displayed.conditional?.length > 0) && (
+            <Card style={{ marginBottom: 16 }}>
+              <CardTitle>認定済みアイテム — {displayed.version}</CardTitle>
+              {["認定", "条件付き認定"].map((j) => {
+                const group = j === "認定" ? displayed.certified : displayed.conditional;
+                if (!group?.length) return null;
+                return (
+                  <div key={j} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.15em", marginBottom: 8 }}>{j.toUpperCase()}</div>
+                    {group.map((item) => (
+                      <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+                        <Tag color={J_COLOR[j]}>{item.score}点</Tag>
+                        <Tag color={item.category === "GEAR" ? "gray" : item.category === "SHOES" ? "blue" : "green"}>{item.category}</Tag>
+                        <div style={{ flex: 1, minWidth: 120 }}>
+                          <div style={{ fontSize: 12 }}>No.{item.no}　{item.label}</div>
+                        </div>
+                        {item.price && (
+                          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>¥{Number(item.price).toLocaleString()}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </Card>
+          )}
+        </>
+      ) : (
+        /* まだ一度も生成していない場合は現在のデータから静的表示 */
+        <>
+          <Card style={{ marginBottom: 16 }}>
+            <CardTitle>認定済みアイテム一覧（現在のストックから）</CardTitle>
+            {["認定", "条件付き認定", "保留"].map((j) => {
+              const group = items.filter((i) => i.judgment === j);
+              if (!group.length) return null;
+              return (
+                <div key={j} style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.15em", marginBottom: 8 }}>{j.toUpperCase()}</div>
+                  {group.map((item) => (
+                    <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+                      <Tag color={J_COLOR[item.judgment]}>{item.score}点</Tag>
+                      <Tag color={item.category === "GEAR" ? "gray" : item.category === "SHOES" ? "blue" : "green"}>{item.category}</Tag>
+                      <div style={{ flex: 1, minWidth: 120 }}>
+                        <div style={{ fontSize: 12 }}>No.{item.no}　{item.label}</div>
+                      </div>
+                      {item.price && (
+                        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>¥{Number(item.price).toLocaleString()}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </Card>
+        </>
+      )}
+
+      {/* 投稿サマリー（常に表示） */}
+      {posts.length > 0 && (
+        <Card style={{ marginBottom: 16 }}>
+          <CardTitle>投稿データサマリー（{posts.length} 本）</CardTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>タイプ別平均</div>
+              {typeData.map((d) => (
+                <div key={d.type} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+                  <Tag color={TYPE_COLOR[d.type]}>{d.type}型</Tag>
+                  <span style={{ fontSize: 11, flex: 1 }}>{d.label.replace(/（.*?）/, "")}</span>
+                  <span style={{ fontSize: 12, minWidth: 60, textAlign: "right" }}>{d.avgViews?.toLocaleString()} 再生</span>
+                  <span style={{ fontSize: 11, color: "var(--accent)", minWidth: 50, textAlign: "right" }}>{d.avgLikeRate}%</span>
                 </div>
               ))}
             </div>
-          );
-        })}
-      </Card>
-
-      {/* コピー設計ルール */}
-      <Card style={{ marginBottom: 16 }}>
-        <CardTitle>コピー設計ルール（006-B・001-C検証で確定）</CardTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          {COPY_RULES.map((r) => (
-            <div key={r.title}>
-              <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>{r.title}</div>
-              {r.items.map((item, i) => (
-                <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0", display: "flex", gap: 6 }}>
-                  <span style={{ color: "var(--border)" }}>—</span>
-                  {item}
+            <div>
+              <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>シリーズ別平均再生</div>
+              {seriesData.map((d) => (
+                <div key={d.series} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 11, color: "var(--text-dim)", width: 30 }}>{d.series}</span>
+                  <div style={{ flex: 1, background: "var(--bg2)", height: 4, borderRadius: 0 }}>
+                    <div style={{ width: `${Math.min(100, (d.avgViews / 12000) * 100)}%`, height: "100%", background: d.avgViews >= 3000 ? "var(--accent)" : "var(--border)" }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: d.avgViews >= 3000 ? "var(--accent)" : "var(--text)", minWidth: 60, textAlign: "right" }}>
+                    {d.avgViews?.toLocaleString()}
+                  </span>
                 </div>
               ))}
             </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* 投稿データサマリー */}
-      <Card style={{ marginBottom: 16 }}>
-        <CardTitle>投稿データサマリー（{posts.length} 本）</CardTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-          {/* タイプ別 */}
-          <div>
-            <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>タイプ別平均</div>
-            {typeData.map((d) => (
-              <div key={d.type} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-                <Tag color={TYPE_COLOR[d.type]}>{d.type}型</Tag>
-                <span style={{ fontSize: 11, flex: 1 }}>{d.label.replace(/（.*?）/, "")}</span>
-                <span style={{ fontSize: 12, color: "var(--text)", minWidth: 60, textAlign: "right" }}>{d.avgViews?.toLocaleString()} 再生</span>
-                <span style={{ fontSize: 11, color: "var(--accent)", minWidth: 50, textAlign: "right" }}>{d.avgLikeRate}%</span>
-              </div>
-            ))}
           </div>
-          {/* シリーズ別 */}
-          <div>
-            <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.1em", marginBottom: 8 }}>シリーズ別平均再生</div>
-            {seriesData.map((d) => (
-              <div key={d.series} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", width: 30 }}>{d.series}</span>
-                <div style={{ flex: 1, background: "var(--bg2)", height: 4, borderRadius: 0 }}>
-                  <div style={{ width: `${Math.min(100, (d.avgViews / 12000) * 100)}%`, height: "100%", background: d.avgViews >= 3000 ? "var(--accent)" : "var(--border)" }} />
-                </div>
-                <span style={{ fontSize: 12, color: d.avgViews >= 3000 ? "var(--accent)" : "var(--text)", minWidth: 60, textAlign: "right" }}>
-                  {d.avgViews?.toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </Card>
+      )}
 
-        {/* データからの示唆 */}
-        <div style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.12em", marginBottom: 8 }}>データからの示唆</div>
-        {INSIGHTS.map((ins) => (
-          <div key={ins.label} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 12 }}>
-            <span style={{ fontSize: 10, color: "var(--accent)", whiteSpace: "nowrap", letterSpacing: "0.05em" }}>■ {ins.label}</span>
-            <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.6 }}>{ins.text}</span>
-          </div>
-        ))}
-      </Card>
-
-      {/* 審査基準 */}
+      {/* 審査基準（常に表示） */}
       <Card>
         <CardTitle>認定基準（100点満点 / 5項目×20点）</CardTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           {[
             ["① 装備性", "毎日・なければ生活が止まる＝20点"],
-            ["② 判断削減力", "機能面の判断が3つ以上消える＝20点（色・デザイン以外で評価）"],
+            ["② 判断削減力", "機能面の判断が3つ以上消える＝20点"],
             ["③ 継続運用性", "5年以上・廃番なし・同じものを買い直せる＝20点"],
             ["④ ミスマッチ明確性", "向いていない人を4つ以上・理由付きで明言＝20点"],
             ["⑤ 代替不可能性", "同カテゴリで唯一・代替不可能＝20点"],

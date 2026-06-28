@@ -3,6 +3,7 @@ import { initialData } from "../data/initialData";
 
 const STORAGE_KEY = "upgear_data";
 const LEARNING_KEY = "upgear_learning";
+const MASTER_KEY = "upgear_master";
 
 function load() {
   try {
@@ -28,9 +29,22 @@ function saveLearning(data) {
   localStorage.setItem(LEARNING_KEY, JSON.stringify(data));
 }
 
+function loadMaster() {
+  try {
+    const raw = localStorage.getItem(MASTER_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { versions: [] };
+}
+
+function saveMaster(data) {
+  localStorage.setItem(MASTER_KEY, JSON.stringify(data));
+}
+
 export function useStore() {
   const [data, setData] = useState(() => load() || initialData);
   const [learningData, setLearningDataState] = useState(() => loadLearning());
+  const [masterStore, setMasterStore] = useState(() => loadMaster());
 
   const update = useCallback((updater) => {
     setData((prev) => {
@@ -81,6 +95,16 @@ export function useStore() {
     });
   };
 
+  const addMasterVersion = (version) => {
+    setMasterStore((prev) => {
+      const next = { versions: [...(prev.versions || []), version].slice(-20) };
+      saveMaster(next);
+      return next;
+    });
+  };
+
+  const latestMasterVersion = masterStore.versions[masterStore.versions.length - 1] || null;
+
   return {
     data,
     addPost, updatePost, deletePost,
@@ -89,5 +113,8 @@ export function useStore() {
     resetData,
     learningData,
     addLearning,
+    masterStore,
+    addMasterVersion,
+    latestMasterVersion,
   };
 }

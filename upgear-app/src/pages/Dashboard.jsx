@@ -189,7 +189,7 @@ export default function Dashboard({ data, setFollowers }) {
       {/* 推奨 */}
       <Card>
         <CardTitle>次シリーズ推奨 — 分析から自動生成</CardTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
           <div style={{ padding: "12px 16px", background: "var(--bg2)", border: "1px solid var(--accent)", borderLeft: "3px solid var(--accent)" }}>
             <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.15em", marginBottom: 6 }}>HOOK TYPE</div>
             <div style={{ fontSize: 13 }}>{bestType?.label} が最高平均再生</div>

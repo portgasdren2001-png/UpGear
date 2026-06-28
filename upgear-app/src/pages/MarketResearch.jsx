@@ -753,7 +753,7 @@ export default function MarketResearch({ data, learningData, onApplyToStudio, on
       {/* Tabs */}
       {research && (
         <>
-          <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 16, overflowX: "auto" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid var(--border)", marginBottom: 16 }}>
             {TABS.map(t => (
               <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
                 padding: "9px 14px", background: "none", border: "none", whiteSpace: "nowrap",

@@ -321,7 +321,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const STEPS = ["セットアップ", "テーマ", "フック", "スライド構築", "投稿分析"];
 
   const stepBar = (
-    <div style={{ display: "flex", marginBottom: 24, borderBottom: "1px solid var(--border)" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 24, borderBottom: "1px solid var(--border)" }}>
       {STEPS.map((s, i) => {
         const n = i + 1;
         const active = step === n;

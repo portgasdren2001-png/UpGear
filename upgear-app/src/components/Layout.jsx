@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./Layout.css";
+import { WorkflowBar, WorkflowProvider, useWorkflow } from "../context/WorkflowContext";
 
 const NAV_ITEMS = [
   { id: "dashboard", icon: "◈", label: "ダッシュボード" },
@@ -10,8 +11,8 @@ const NAV_ITEMS = [
   { id: "master",    icon: "◎", label: "マスター" },
 ];
 
-export default function Layout({ children, active, onNav }) {
-  const [collapsed, setCollapsed] = useState(false);
+function LayoutInner({ children, active, onNav, collapsed, setCollapsed }) {
+  const { activeItemId } = useWorkflow();
 
   return (
     <div className={`layout ${collapsed ? "collapsed" : ""}`}>
@@ -33,10 +34,23 @@ export default function Layout({ children, active, onNav }) {
           ))}
         </nav>
         <div className="sidebar-footer">
-          {!collapsed && <span className="version-tag">v4.6</span>}
+          {!collapsed && <span className="version-tag">v5.0</span>}
         </div>
       </aside>
-      <main className="content">{children}</main>
+      {activeItemId && <WorkflowBar activePage={active} onNav={onNav} />}
+      <main className={`content${activeItemId ? " workflow-active" : ""}`}>{children}</main>
     </div>
+  );
+}
+
+export default function Layout({ children, active, onNav }) {
+  const [collapsed, setCollapsed] = useState(false);
+
+  return (
+    <WorkflowProvider onNav={onNav}>
+      <LayoutInner active={active} onNav={onNav} collapsed={collapsed} setCollapsed={setCollapsed}>
+        {children}
+      </LayoutInner>
+    </WorkflowProvider>
   );
 }

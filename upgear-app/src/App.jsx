@@ -13,7 +13,12 @@ export default function App() {
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [researchApply, setResearchApply] = useState(null);
   const store = useStore();
-  const { data, addPost, updatePost, deletePost, addItem, updateItem, deleteItem, setFollowers, learningData, addLearning } = store;
+  const {
+    data, addPost, updatePost, deletePost,
+    addItem, updateItem, deleteItem,
+    setFollowers, learningData, addLearning,
+    masterStore, addMasterVersion, latestMasterVersion,
+  } = store;
 
   const navToStudio = (itemId) => { setSelectedItemId(itemId); setPage("script"); };
   const navToStock  = (itemId) => { setSelectedItemId(itemId); setPage("stock"); };
@@ -32,8 +37,16 @@ export default function App() {
       case "research":  return <MarketResearch data={data} learningData={learningData} onApplyToStudio={applyResearchToStudio} onNavToStudio={() => setPage("script")} />;
       case "script":    return <ContentStudio data={data} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStock={navToStock} onNavToResearch={navToResearch} researchApply={researchApply} onClearResearch={() => setResearchApply(null)} addLearning={addLearning} learningData={learningData} />;
       case "posts":     return <Posts data={data} addPost={addPost} updatePost={updatePost} deletePost={deletePost} />;
-      case "master":    return <Master data={data} />;
-      default:          return null;
+      case "master":    return (
+        <Master
+          data={data}
+          learningData={learningData}
+          masterStore={masterStore}
+          addMasterVersion={addMasterVersion}
+          latestMasterVersion={latestMasterVersion}
+        />
+      );
+      default: return null;
     }
   };
 
