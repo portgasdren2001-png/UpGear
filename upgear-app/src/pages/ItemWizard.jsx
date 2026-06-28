@@ -183,7 +183,7 @@ function Step1({ urls, setUrls, onNext }) {
 
 // ─── Step 2: 商品理解（フェッチシミュレーション） ────────────────────────────
 
-function Step2({ urls, item, onComplete }) {
+function Step2({ urls, item, onComplete, onBack }) {
   const [stageIdx, setStageIdx] = useState(0);
   const [stageStatus, setStageStatus] = useState({});
   const [done, setDone] = useState(false);
@@ -202,13 +202,14 @@ function Step2({ urls, item, onComplete }) {
         setDone(true);
         return;
       }
-      setStageIdx(idx);
-      setStageStatus((prev) => ({ ...prev, [stages[idx].id]: "running" }));
+      const i = idx;
+      setStageIdx(i);
+      setStageStatus((prev) => ({ ...prev, [stages[i].id]: "running" }));
       const t = setTimeout(() => {
-        setStageStatus((prev) => ({ ...prev, [stages[idx].id]: "done" }));
+        setStageStatus((prev) => ({ ...prev, [stages[i].id]: "done" }));
         idx++;
         next();
-      }, stages[idx].ms);
+      }, stages[i].ms);
       timerRef.current.push(t);
     };
     next();
@@ -275,7 +276,8 @@ function Step2({ urls, item, onComplete }) {
       {done && card && (
         <div>
           <UnderstandingScore score={card.understandingScore} missing={card.missingFields || []} />
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Btn small onClick={() => onBack()}>← URL修正</Btn>
             <Btn variant="primary" onClick={() => onComplete(card)}>確認画面へ →</Btn>
           </div>
         </div>
@@ -579,7 +581,8 @@ function Step6({ savedItem, research, onGoToStudio, onFinish }) {
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
 export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose }) {
-  const [step, setStep] = useState(1);
+  const hasExistingUrls = existingItem && Object.values(existingItem.urls || {}).some(Boolean);
+  const [step, setStep] = useState(hasExistingUrls ? 2 : 1);
   const [urls, setUrls] = useState(existingItem?.urls || { official: "", amazon: "", rakuten: "", kakaku: "", review: "" });
   const [card, setCard] = useState(existingItem?.card || null);
   const [savedItem, setSavedItem] = useState(existingItem || null);
@@ -647,6 +650,7 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
             urls={urls}
             item={existingItem || { label: "", category: "GEAR", score: 70, price: "", judgment: "保留" }}
             onComplete={handleStep2Complete}
+            onBack={() => setStep(1)}
           />
         )}
         {step === 3 && card && (
