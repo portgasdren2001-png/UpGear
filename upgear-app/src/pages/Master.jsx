@@ -43,70 +43,212 @@ function VersionCard({ version, isLatest, onSelect, selected }) {
 function formatMasterAsText(version, data) {
   const d = new Date(version.ts);
   const dateStr = d.toLocaleString("ja-JP");
-  const sep = "─".repeat(60);
+  const W = 70;
+  const sep  = "═".repeat(W);
+  const sep2 = "─".repeat(W);
+  const L = (text = "") => text;
+  const H = (title) => [``, sep, `  ${title}`, sep, ``];
+  const H2 = (title) => [``, sep2, `  ${title}`, sep2, ``];
+  const items = data?.items || [];
+  const posts = data?.posts || [];
+
   const lines = [
-    `UpGear マスター知識ベース`,
-    `バージョン: ${version.version}　生成日時: ${dateStr}`,
     sep,
-    "",
-    "【パフォーマンスサマリー】",
+    `  UpGear 引き継ぎ書`,
+    `  バージョン: ${version.version}　生成日時: ${dateStr}`,
+    sep,
+    ``,
+
+    // ── SECTION 1: MISSION ──────────────────────────────────────────────
+    ...H("1. UpGear ミッション & 哲学"),
+    `  生活と仕事を、装備で立て直す。`,
+    `  判断を整理し、線を引き、言葉として残す。`,
+    ``,
+    `  SD思想（Silent Delegation）`,
+    `  　人間の判断能力には構造的な限界がある。`,
+    `  　道具・習慣・環境に判断の重さを委任（delegate）することで`,
+    `  　認知負荷を削減し、本質的な思考に集中できる状態を作る。`,
+    ``,
+    `  UpGearの定義する「装備」とは`,
+    `  　毎日使うもの / なければ生活・仕事が止まるもの`,
+    `  　一度選べば判断コストがゼロになるもの`,
+    `  　他人に勧められるほど確信を持てるもの`,
+    ``,
+
+    // ── SECTION 2: SCORING CRITERIA ─────────────────────────────────────
+    ...H("2. UpGear認定基準（100点満点）"),
+    `  ① 装備性           20点  毎日・なければ止まる`,
+    `  ② 判断削減力       20点  3つ以上の判断が消える`,
+    `  ③ 継続運用性       20点  5年以上・廃番なし・再購入可`,
+    `  ④ ミスマッチ明確性 20点  向いていない人を4つ以上・理由つき`,
+    `  ⑤ 代替不可能性     20点  同カテゴリで唯一`,
+    ``,
+    `  判定ライン`,
+    `  　95〜100: 殿堂入り  80〜94: 認定`,
+    `  　65〜79: 条件付き認定  50〜64: 保留  49以下: 非認定`,
+    `  　PR・提供品: ②から -5点`,
+    ``,
+
+    // ── SECTION 3: PERFORMANCE ──────────────────────────────────────────
+    ...H(`3. パフォーマンスサマリー — ${version.version}`),
     `  総投稿数:     ${version.summary.totalPosts}本`,
+    `  総再生数:     ${(version.summary.totalViews || 0).toLocaleString()}`,
     `  平均再生数:   ${version.summary.avgViews.toLocaleString()}`,
     `  平均いいね率: ${version.summary.avgLikeRate}%`,
     `  フォロワー:   ${version.summary.followers}`,
-    `  認定アイテム: ${version.summary.certifiedItems}件`,
-    `  ストック数:   ${version.summary.totalItems}件`,
-    "",
+    `  認定:         ${version.summary.certifiedItems}件`,
+    `  条件付き認定: ${version.summary.conditionalItems || 0}件`,
+    `  ストック:     ${version.summary.totalItems}件`,
+    ``,
+
+    // Top post
+    ...(version.topPost ? [
+      ...H2("3a. 最高再生投稿"),
+      `  No.${version.topPost.no}`,
+      `  フック: 「${version.topPost.hook || "—"}」`,
+      `  再生数: ${(version.topPost.views || 0).toLocaleString()}`,
+      ``,
+    ] : []),
+
+    // ── SECTION 4: CONTENT RULES ────────────────────────────────────────
+    ...H("4. コピー設計ルール（AI自動更新）"),
+    ...(version.rules || []).flatMap((r) => [
+      `  ■ ${r.title}`,
+      ...(r.items || []).map((item) => `    ・${item}`),
+      ``,
+    ]),
+
+    // ── SECTION 5: AI INSIGHTS ──────────────────────────────────────────
+    ...H("5. データからの示唆"),
+    ...(version.insights || []).flatMap((ins) => [
+      `  ■ ${ins.label}`,
+      `    ${ins.text}`,
+      ``,
+    ]),
+
+    // ── SECTION 6: PRODUCT DATABASE ─────────────────────────────────────
+    ...H("6. 商品データベース"),
+    ...H2("6a. 認定アイテム"),
+    ...(version.certified?.length
+      ? version.certified.map((item) =>
+          `  No.${String(item.no).padEnd(4)} [${String(item.score).padStart(3)}点] ${item.category?.padEnd(5) || "     "} ${item.label}${item.price ? `  ¥${Number(item.price).toLocaleString()}` : ""}`)
+      : ["  なし"]),
+    ``,
+
+    ...H2("6b. 条件付き認定"),
+    ...(version.conditional?.length
+      ? version.conditional.map((item) =>
+          `  No.${String(item.no).padEnd(4)} [${String(item.score).padStart(3)}点] ${item.category?.padEnd(5) || "     "} ${item.label}`)
+      : ["  なし"]),
+    ``,
+
+    // Full stock with understanding scores
+    ...H2("6c. ストック全件（商品理解スコアつき）"),
+    ...(items.length
+      ? items.map((item) =>
+          `  No.${String(item.no).padEnd(4)} [UpGear:${String(item.score).padStart(3)}点 理解:${String(item.card?.understandingScore ?? "—").padStart(3)}点] ${item.judgment?.padEnd(8) || "        "} ${item.label}`)
+      : ["  なし"]),
+    ``,
+
+    // ── SECTION 7: PRODUCT CARDS ────────────────────────────────────────
+    ...H("7. 商品カルテ（詳細）"),
+    ...items.filter(i => i.card).flatMap((item) => {
+      const c = item.card;
+      return [
+        sep2,
+        `  ${item.label}  [No.${item.no} / ${item.judgment} / ${item.score}点]`,
+        sep2,
+        `  カテゴリ:     ${c.category || "—"} > ${c.subCategory || "—"}`,
+        `  ブランド:     ${c.brand || "—"}`,
+        `  商品タイプ:   ${c.productType || "—"}`,
+        `  理解スコア:   ${c.understandingScore ?? "—"}点`,
+        `  カテゴリ信頼度: ${c.categoryConfidence ?? "—"}%`,
+        `  判定根拠:     ${c.categorySource || "—"}`,
+        ``,
+        `  [商品理解]`,
+        `  これは何か:   ${c.whatIsThis || "—"}`,
+        `  解決すること: ${c.whatItSolves || "—"}`,
+        `  向いている人: ${c.forWho || "—"}`,
+        ...(c.notForWho?.length ? [`  向いていない: ${c.notForWho.join(" / ")}`] : []),
+        ...(c.strengths?.length  ? [`  強み:         ${c.strengths.slice(0,3).join("、")}`] : []),
+        ...(c.weaknesses?.length ? [`  弱み:         ${c.weaknesses.slice(0,2).join("、")}`] : []),
+        ...(c.reviewData?.avg    ? [`  レビュー:     ★${c.reviewData.avg} / ${(c.reviewData.count || 0).toLocaleString()}件`] : []),
+        ...(c.searchKeywords?.length ? [`  キーワード:   ${c.searchKeywords.slice(0,6).join("、")}`] : []),
+        ``,
+      ];
+    }),
+
+    // ── SECTION 8: POST HISTORY ─────────────────────────────────────────
+    ...H("8. 投稿データ"),
+    ...(posts.length
+      ? posts.slice(0, 30).map((p) =>
+          `  No.${String(p.no).padEnd(4)} ${String(p.views || 0).padStart(6)}再生 いいね率${p.likeRate || "—"}% [${p.type || "—"}型] 「${(p.hook || "").slice(0, 30)}」`)
+      : ["  なし"]),
+    ``,
+
+    // ── SECTION 9: WORKFLOW ─────────────────────────────────────────────
+    ...H("9. ワークフロー"),
+    `  UpGear操作フロー（v6.1 — Playwright + Claude API）`,
+    ``,
+    `  ① URL入力`,
+    `     商品のURL（Amazon / 楽天 / 価格.com / 公式など）を入力`,
+    ``,
+    `  ② Playwright解析`,
+    `     ページを実際に開き、JSON-LD・schema.org・パンくず・`,
+    `     レビュー・画像を構造化データとして取得`,
+    ``,
+    `  ③ Vision解析`,
+    `     取得した商品画像をClaudeのVision APIで解析`,
+    `     → 商品種類・用途・デザイン・ターゲットを推定`,
+    ``,
+    `  ④ AI商品理解（Claude）`,
+    `     構造化データのみを使って商品を理解`,
+    `     カテゴリ判定は優先順位チェーンで決定（AI推論は最後）`,
+    `     信頼度95%以上で自動確定、未満はユーザー確認`,
+    ``,
+    `  ⑤ 商品カルテ確認・保存`,
+    `     生成されたカルテを確認・修正してストックに保存`,
+    ``,
+    `  ⑥ 市場調査`,
+    `     商品カルテのキーワード・カテゴリを使って市場調査`,
+    `     ※商品名での検索は使用しない`,
+    ``,
+    `  ⑦ 制作スタジオ`,
+    `     フック生成・投稿企画・スクリプト作成`,
+    ``,
+    `  ⑧ マスター更新`,
+    `     全投稿・全アイテムの知識ベースを自動更新`,
+    `     → この引き継ぎ書をテキストファイルとして出力`,
+    ``,
+
+    // ── SECTION 10: TECHNICAL ───────────────────────────────────────────
+    ...H("10. 技術構成"),
+    `  Frontend: React 19 + Vite + localStorage`,
+    `  Backend:  Express + Playwright + Claude API (Haiku)`,
+    `  Scraping: Playwright (Chromium) — JSON-LD / schema.org / OG`,
+    `  Vision:   Claude Vision API`,
+    `  AI:       claude-haiku-4-5-20251001`,
+    ``,
+    `  カテゴリ判定優先順位`,
+    `  ① schema.org Product.category`,
+    `  ② JSON-LD`,
+    `  ③ パンくず`,
+    `  ④ Amazonカテゴリ`,
+    `  ⑤ 楽天カテゴリ`,
+    `  ⑥ 価格.com`,
+    `  ⑦ h1タイトル`,
+    `  ⑧ titleタグ`,
+    `  ⑨ meta description`,
+    `  ⑩ 商品説明`,
+    `  ⑪ レビュー`,
+    `  ⑫ Vision解析`,
+    `  ⑬ AI推論（最終手段）`,
+    ``,
+
     sep,
-    "【コピー設計ルール】",
-    "",
+    `  Generated by UpGear v6.1 — ${dateStr}`,
+    sep,
   ];
-
-  (version.rules || []).forEach((r) => {
-    lines.push(`■ ${r.title}`);
-    (r.items || []).forEach((item) => lines.push(`  ・${item}`));
-    lines.push("");
-  });
-
-  lines.push(sep);
-  lines.push("【データからの示唆】");
-  lines.push("");
-  (version.insights || []).forEach((ins) => {
-    lines.push(`■ ${ins.label}`);
-    lines.push(`  ${ins.text}`);
-    lines.push("");
-  });
-
-  if (version.certified?.length) {
-    lines.push(sep);
-    lines.push("【認定アイテム一覧】");
-    lines.push("");
-    version.certified.forEach((item) => {
-      lines.push(`  No.${item.no}  ${item.label}  [${item.score}点 / ${item.category}]${item.price ? `  ¥${Number(item.price).toLocaleString()}` : ""}`);
-    });
-    lines.push("");
-  }
-
-  if (version.conditional?.length) {
-    lines.push("【条件付き認定アイテム】");
-    lines.push("");
-    version.conditional.forEach((item) => {
-      lines.push(`  No.${item.no}  ${item.label}  [${item.score}点 / ${item.category}]`);
-    });
-    lines.push("");
-  }
-
-  lines.push(sep);
-  lines.push("【UpGear ミッション】");
-  lines.push("  生活と仕事を、装備で立て直す。");
-  lines.push("  判断を整理し、線を引き、言葉として残す。");
-  lines.push("");
-  lines.push("  SD思想（Silent Delegation）：");
-  lines.push("  人間の判断能力には構造的な限界がある。");
-  lines.push("  判断の重さを静かに代替する設計思想。");
-  lines.push("");
-  lines.push(sep);
-  lines.push(`Generated by UpGear — ${dateStr}`);
 
   return lines.join("\n");
 }
@@ -144,7 +286,7 @@ export default function Master({ data, learningData, masterStore, addMasterVersi
       setSelectedIdx(null);
       setShowDiff(true);
       setGenerating(false);
-      const text = formatMasterAsText(newVer, data);
+      const text = formatMasterAsText(newVer, { items: data.items || [], posts: data.posts || [] });
       const d = new Date(newVer.ts);
       const dateTag = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
       downloadTextFile(text, `upgear-master-${newVer.version}-${dateTag}.txt`);

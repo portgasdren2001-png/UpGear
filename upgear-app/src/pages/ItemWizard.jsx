@@ -181,97 +181,269 @@ function Step1({ urls, setUrls, onNext }) {
   );
 }
 
-// ─── Step 2: 商品理解（フェッチシミュレーション） ────────────────────────────
+// ─── Step 2: 商品理解（Playwright + Claude API） ──────────────────────────────
+
+const REAL_STAGES = [
+  { id: "init",    label: "URL解析・準備" },
+  { id: "fetch",   label: "ページ取得（Playwright）" },
+  { id: "parse",   label: "DOM解析" },
+  { id: "schema",  label: "スキーマ取得（JSON-LD / schema.org）" },
+  { id: "reviews", label: "レビュー収集" },
+  { id: "vision",  label: "Vision解析" },
+  { id: "analyze", label: "AI商品理解（Claude）" },
+  { id: "score",   label: "カルテ生成・スコア算出" },
+];
+
+function ConfidenceBadge({ confidence }) {
+  const color = confidence >= 95 ? "#98c379" : confidence >= 70 ? "var(--accent)" : "#e06c75";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ fontSize: 11, color, fontWeight: 700 }}>{confidence}%</div>
+      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+        {confidence >= 95 ? "自動確定" : "要確認"}
+      </div>
+    </div>
+  );
+}
+
+function DebugPanel({ debug, categoryInfo, visible }) {
+  if (!visible || !debug) return null;
+  return (
+    <div style={{ background: "#1a1d24", border: "1px solid #444", padding: "12px 14px", marginBottom: 16, fontSize: 10 }}>
+      <div style={{ color: "#98c379", marginBottom: 8, letterSpacing: "0.15em" }}>DEBUG — 商品理解ログ</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div>
+          <div style={{ color: "#98c379", marginBottom: 4 }}>✔ 取得成功</div>
+          {(debug.found || []).map(f => <div key={f} style={{ color: "#98c379", padding: "1px 0" }}>✔ {f}</div>)}
+        </div>
+        <div>
+          <div style={{ color: "#e06c75", marginBottom: 4 }}>✖ 取得失敗</div>
+          {(debug.missing || []).map(m => <div key={m} style={{ color: "#e06c75", padding: "1px 0" }}>✖ {m}</div>)}
+        </div>
+      </div>
+      {categoryInfo && (
+        <div style={{ marginTop: 8, borderTop: "1px solid #333", paddingTop: 8 }}>
+          <div style={{ color: "var(--accent)", marginBottom: 4 }}>カテゴリ判定</div>
+          <div style={{ color: "var(--text)" }}>{categoryInfo.category || "未取得"}</div>
+          <div style={{ color: "var(--text-dim)", marginTop: 2 }}>
+            根拠: {(categoryInfo.sources || []).join(" → ") || "なし"}　信頼度: {categoryInfo.confidence || 0}%
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Step2({ urls, item, onComplete, onBack }) {
-  const [stageIdx, setStageIdx] = useState(0);
   const [stageStatus, setStageStatus] = useState({});
+  const [progressLog, setProgressLog] = useState([]);
   const [done, setDone] = useState(false);
   const [card, setCard] = useState(null);
-  const timerRef = useRef([]);
+  const [error, setError] = useState(null);
+  const [debugData, setDebugData] = useState(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [requiresConfirmation, setRequiresConfirmation] = useState(false);
+  const [confidence, setConfidence] = useState(null);
+  const [serverAvailable, setServerAvailable] = useState(null);
+  const abortRef = useRef(null);
 
   const urlCount = Object.values(urls).filter(Boolean).length;
-  const stages = FETCH_STAGES;
 
   useEffect(() => {
-    let idx = 0;
-    const next = () => {
-      if (idx >= stages.length) {
-        const generatedCard = generateProductUnderstanding({ ...item, urls });
-        setCard(generatedCard);
-        setDone(true);
+    let cancelled = false;
+
+    const setStage = (id, status) => {
+      if (!cancelled) setStageStatus(prev => ({ ...prev, [id]: status }));
+    };
+    const addLog = (msg) => {
+      if (!cancelled) setProgressLog(prev => [...prev.slice(-8), msg]);
+    };
+
+    const runReal = async () => {
+      // Check server
+      try {
+        const health = await fetch("/api/health", { signal: AbortSignal.timeout(2000) });
+        if (!health.ok) throw new Error();
+        setServerAvailable(true);
+      } catch {
+        setServerAvailable(false);
+        runFallback();
         return;
       }
-      const i = idx;
-      setStageIdx(i);
-      setStageStatus((prev) => ({ ...prev, [stages[i].id]: "running" }));
-      const t = setTimeout(() => {
-        setStageStatus((prev) => ({ ...prev, [stages[i].id]: "done" }));
-        idx++;
-        next();
-      }, stages[i].ms);
-      timerRef.current.push(t);
+
+      setStage("init", "running");
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const resp = await fetch("/api/product/understand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls, item }),
+          signal: controller.signal,
+        });
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+
+        while (true) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone || cancelled) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const evt = JSON.parse(line.slice(6));
+              if (evt.type === "stage") {
+                setStage(evt.id, evt.status);
+                if (evt.detail) addLog(evt.detail);
+              } else if (evt.type === "progress") {
+                addLog(evt.detail);
+              } else if (evt.type === "rawDebug") {
+                setDebugData({ debug: evt.debug, categoryInfo: evt.categoryInfo });
+              } else if (evt.type === "card") {
+                if (!cancelled) setCard(evt.card);
+              } else if (evt.type === "done") {
+                setRequiresConfirmation(evt.requiresConfirmation);
+                setConfidence(evt.confidence);
+                if (!cancelled) setDone(true);
+              } else if (evt.type === "error") {
+                setError(evt.message);
+              }
+            } catch {}
+          }
+        }
+      } catch (err) {
+        if (!cancelled && err.name !== "AbortError") {
+          setError(err.message);
+        }
+      }
     };
-    next();
-    return () => timerRef.current.forEach(clearTimeout);
+
+    const runFallback = () => {
+      // Fallback to local heuristics when server is unavailable
+      REAL_STAGES.forEach(s => setStage(s.id, "running"));
+      addLog("サーバー未起動 — ローカル推論モードで実行");
+      setTimeout(() => {
+        if (cancelled) return;
+        REAL_STAGES.forEach(s => setStage(s.id, "done"));
+        const generatedCard = generateProductUnderstanding({ ...item, urls });
+        setCard(generatedCard);
+        setConfidence(50);
+        setDone(true);
+      }, 2000);
+    };
+
+    runReal();
+    return () => { cancelled = true; abortRef.current?.abort(); };
   }, []);
+
+  const stages = REAL_STAGES;
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
-          {done ? "商品理解完了" : "商品を理解しています..."}
-        </h2>
-        <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
-          {done ? "商品カルテが生成されました。次のステップへ進んでください。" : `${urlCount}件のURLを解析中`}
-        </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>
+            {done ? "商品理解完了" : "商品を理解しています..."}
+          </h2>
+          <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            {done
+              ? "商品カルテが生成されました。次のステップへ進んでください。"
+              : `${urlCount}件のURLをPlaywrightで解析中`}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {confidence !== null && <ConfidenceBadge confidence={confidence} />}
+          <button onClick={() => setShowDebug(v => !v)} style={{
+            fontSize: 9, color: "var(--text-dim)", background: "none",
+            border: "1px solid var(--border)", padding: "2px 8px", cursor: "pointer",
+          }}>
+            {showDebug ? "DEBUG ▲" : "DEBUG ▼"}
+          </button>
+        </div>
       </div>
 
+      {/* Debug panel */}
+      <DebugPanel
+        debug={debugData?.debug}
+        categoryInfo={debugData?.categoryInfo}
+        visible={showDebug}
+      />
+
       {/* Progress stages */}
-      <div style={{ marginBottom: 24 }}>
-        {stages.map((s, i) => {
+      <div style={{ marginBottom: 16 }}>
+        {stages.map((s) => {
           const status = stageStatus[s.id];
           return (
             <div key={s.id} style={{
               display: "flex", alignItems: "center", gap: 12, padding: "8px 12px",
-              marginBottom: 4, background: "var(--bg2)", border: "1px solid var(--border)",
-              opacity: i > stageIdx + 1 ? 0.4 : 1,
-              transition: "opacity 0.3s",
+              marginBottom: 4, background: "var(--bg2)", border: `1px solid ${status === "done" ? "rgba(152,195,121,0.3)" : status === "running" ? "var(--accent)" : "var(--border)"}`,
+              transition: "border-color 0.2s",
             }}>
-              <div style={{ width: 20, textAlign: "center" }}>
-                {status === "done" && <span style={{ color: "#98c379", fontSize: 12 }}>✓</span>}
-                {status === "running" && <span style={{ fontSize: 10, animation: "spin 1s linear infinite", display: "inline-block" }}>◌</span>}
-                {!status && <span style={{ color: "var(--border)", fontSize: 12 }}>○</span>}
+              <div style={{ width: 20, textAlign: "center", flexShrink: 0 }}>
+                {status === "done"    && <span style={{ color: "#98c379", fontSize: 12 }}>✓</span>}
+                {status === "running" && <span style={{ fontSize: 12, color: "var(--accent)" }}>◌</span>}
+                {status === "error"   && <span style={{ color: "#e06c75", fontSize: 12 }}>✗</span>}
+                {!status              && <span style={{ color: "var(--border)", fontSize: 12 }}>○</span>}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 12, color: status === "done" ? "var(--text)" : status === "running" ? "var(--accent)" : "var(--text-dim)" }}>
                   {s.label}
                 </div>
-                {status === "running" && (
-                  <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>
-                    {Object.entries(urls).filter(([, v]) => v).map(([k]) => URL_TYPE_LABELS[detectUrlType(urls[k])] || k).join(" / ")}
-                  </div>
-                )}
               </div>
-              {status === "done" && <span style={{ fontSize: 10, color: "#98c379" }}>完了</span>}
               {status === "running" && (
-                <div style={{ width: 60, height: 3, background: "var(--border)" }}>
-                  <div style={{
-                    height: "100%", background: "var(--accent)",
-                    animation: "progress-bar 0.8s linear infinite",
-                    width: "40%",
-                  }} />
+                <div style={{ width: 40, height: 2, background: "var(--border)", overflow: "hidden" }}>
+                  <div style={{ width: "40%", height: "100%", background: "var(--accent)", animation: "progress-bar 0.8s linear infinite" }} />
                 </div>
               )}
+              {status === "done" && <span style={{ fontSize: 9, color: "#98c379" }}>完了</span>}
             </div>
           );
         })}
       </div>
 
-      {/* Phase 2 notice */}
-      <div style={{ fontSize: 10, color: "var(--text-dim)", background: "var(--bg2)", border: "1px solid var(--border)", padding: "8px 12px", marginBottom: 16 }}>
-        ◎ Phase 1: カテゴリDBとAI推論を使用　／　Phase 2: Playwrightで実URLから取得・Vision APIで画像解析
-      </div>
+      {/* Progress log */}
+      {progressLog.length > 0 && (
+        <div style={{ background: "#1a1d24", border: "1px solid var(--border)", padding: "8px 12px", marginBottom: 16, fontSize: 10, fontFamily: "var(--font-mono)", maxHeight: 80, overflowY: "auto" }}>
+          {progressLog.map((log, i) => (
+            <div key={i} style={{ color: "var(--text-dim)", padding: "1px 0" }}>› {log}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Server status */}
+      {serverAvailable === false && (
+        <div style={{ background: "rgba(255,107,0,0.08)", border: "1px solid var(--accent)", padding: "8px 12px", marginBottom: 16, fontSize: 11, color: "var(--accent)" }}>
+          ⚠ バックエンドサーバー未起動 — ローカル推論で実行中<br />
+          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>本番: cd server && node index.js を実行し、ANTHROPIC_API_KEY を設定してください</span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={{ background: "rgba(224,108,117,0.1)", border: "1px solid #e06c75", padding: "12px", marginBottom: 16, fontSize: 12, color: "#e06c75" }}>
+          エラー: {error}
+        </div>
+      )}
+
+      {/* Confirmation gate for low confidence */}
+      {done && card && requiresConfirmation && (
+        <div style={{ background: "rgba(255,107,0,0.08)", border: "1px solid var(--accent)", padding: "12px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600, marginBottom: 4 }}>
+            カテゴリ信頼度 {confidence}% — 確認が必要です
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+            推定: <strong style={{ color: "var(--text)" }}>{card.category || "不明"}</strong>　›　<strong style={{ color: "var(--text)" }}>{card.subCategory || "不明"}</strong>
+          </div>
+          <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4 }}>
+            根拠: {card.categorySource || "—"}
+          </div>
+        </div>
+      )}
 
       {done && card && (
         <div>
@@ -354,7 +526,6 @@ function Step3({ card, item, onConfirm, onEdit }) {
             <CardRow label="商品名" value={draft.name} accent />
             <CardRow label="ブランド" value={draft.brand} />
             <CardRow label="カテゴリ" value={`${draft.category} > ${card.subCategory}`} />
-            <CardRow label="カテゴリ判定根拠" value={card.categorySource} />
             <CardRow label="商品タイプ" value={card.productType} />
             <CardRow label="価格" value={draft.price ? `¥${Number(draft.price).toLocaleString()}` : "—"} />
             <CardRow label="UpGear判定" value={draft.judgment} />
@@ -363,16 +534,52 @@ function Step3({ card, item, onConfirm, onEdit }) {
         )}
       </div>
 
+      {/* Category evidence panel */}
+      {(card.categoryChain?.length > 0 || card.categorySource) && (
+        <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "14px 16px", marginBottom: 16 }}>
+          <SectionLabel>カテゴリ判定根拠</SectionLabel>
+          {card.categoryChain?.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+              {card.categoryChain.map((c, i) => (
+                <span key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ fontSize: 12, color: i === card.categoryChain.length - 1 ? "var(--accent)" : "var(--text)", fontWeight: i === card.categoryChain.length - 1 ? 700 : 400 }}>{c}</span>
+                  {i < card.categoryChain.length - 1 && <span style={{ color: "var(--border)" }}>›</span>}
+                </span>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 6 }}>
+            取得元: {card.categorySource || "—"}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)" }}>信頼度:</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: (card.categoryConfidence || 0) >= 95 ? "#98c379" : "var(--accent)" }}>
+              {card.categoryConfidence || 0}%
+            </span>
+            <span style={{ fontSize: 10, color: (card.categoryConfidence || 0) >= 95 ? "#98c379" : "var(--accent)" }}>
+              {(card.categoryConfidence || 0) >= 95 ? "✓ 自動確定" : "⚠ 要確認"}
+            </span>
+          </div>
+          {card.visionUsed && card.visionProductType && (
+            <div style={{ marginTop: 6, fontSize: 10, color: "#6fa8dc" }}>
+              Vision: {card.visionProductType}（{card.visionCategory}）
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Product understanding */}
       <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "16px", marginBottom: 16 }}>
         <SectionLabel>商品理解</SectionLabel>
         <CardRow label="この商品は何か" value={card.whatIsThis} />
         <CardRow label="何を解決するか" value={card.whatItSolves} />
-        <CardRow label="なぜ売れているか" value={card.whySelling} />
         <CardRow label="向いている人" value={card.forWho} />
         <CardRow label="向いていない人" value={(card.notForWho || []).join(" / ") || "—"} />
         <CardRow label="強み" value={(card.strengths || []).slice(0, 2).join("、")} />
         <CardRow label="弱み" value={(card.weaknesses || []).slice(0, 2).join("、")} />
+        {card.useScenes?.length > 0 && (
+          <CardRow label="使用シーン" value={card.useScenes.slice(0, 3).join("、")} />
+        )}
       </div>
 
       {/* Review summary */}
