@@ -2,34 +2,57 @@ import { useState } from "react";
 import { PageHeader, Tag, Btn } from "../components/ui";
 import ItemWizard from "./ItemWizard";
 
-const J_COLOR = {
-  "認定":       "orange",
-  "条件付き認定": "blue",
-  "保留":        "gray",
-  "非認定":      "gray",
+// ─── ステータス定義 ────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG = {
+  "未分析":   { color: "#555",     bg: "rgba(85,85,85,0.12)",     label: "未分析" },
+  "解析中":   { color: "#6fa8dc",  bg: "rgba(111,168,220,0.12)",  label: "解析中" },
+  "要確認":   { color: "#e06c75",  bg: "rgba(224,108,117,0.12)",  label: "要確認" },
+  "条件付き": { color: "var(--accent)", bg: "var(--accent-dim)", label: "条件付き" },
+  "認定":     { color: "#98c379",  bg: "rgba(152,195,121,0.12)",  label: "認定" },
+  "非認定":   { color: "#666",     bg: "rgba(100,100,100,0.08)",  label: "非認定" },
 };
 
-const UNDERSTANDING_COLOR = (s) => {
-  if (!s) return "var(--border)";
-  if (s >= 90) return "#98c379";
-  if (s >= 70) return "var(--accent)";
-  return "#e06c75";
-};
+function getItemStatus(item) {
+  if (item.analysisStatus) return item.analysisStatus;
+  if (!item.card) return "未分析";
+  const s = item.score || 0;
+  if (s >= 80) return "認定";
+  if (s >= 70) return "条件付き";
+  if (s < 60)  return "非認定";
+  return "要確認";
+}
 
-function ScoreDot({ score }) {
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      <div style={{ width: 8, height: 8, borderRadius: "50%", background: UNDERSTANDING_COLOR(score), flexShrink: 0 }} />
-      <span style={{ fontSize: 10, color: UNDERSTANDING_COLOR(score) }}>
-        {score ? `${score}点` : "未分析"}
-      </span>
-    </div>
+    <span style={{
+      fontSize: 9, padding: "2px 7px",
+      background: cfg.bg, color: cfg.color,
+      border: `1px solid ${cfg.color}`,
+      letterSpacing: "0.05em", fontWeight: 600,
+      whiteSpace: "nowrap",
+    }}>
+      {cfg.label}
+    </span>
   );
 }
 
+function SourceTag({ source }) {
+  const colors = { "楽天API": "#e07b4c", "Playwright": "#6fa8dc", "Claude AI": "#98c379", "手動": "#888" };
+  return (
+    <span style={{ fontSize: 9, color: colors[source] || "#888", background: "var(--bg2)", border: `1px solid ${colors[source] || "#555"}`, padding: "1px 5px" }}>
+      {source}
+    </span>
+  );
+}
+
+// ─── ItemCard ─────────────────────────────────────────────────────────────────
+
 function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
-  const card = item.card;
-  const urlCount = item.urls ? Object.values(item.urls).filter(Boolean).length : 0;
+  const status = getItemStatus(item);
+  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
+  const rb = item.rakuten || item.card?.rakuten;
 
   return (
     <div
@@ -37,68 +60,62 @@ function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
       style={{
         background: selected ? "var(--accent-dim)" : "var(--bg3)",
         border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
-        borderLeft: `3px solid ${selected ? "var(--accent)" : "transparent"}`,
-        padding: "14px 16px", cursor: "pointer",
+        borderLeft: `3px solid ${cfg.color}`,
+        padding: "12px 14px", cursor: "pointer",
         transition: "border-color 0.15s, background 0.15s",
       }}
     >
-      {/* Header row */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 3 }}>
-            No.{item.no} · <Tag color={J_COLOR[item.judgment]}>{item.category}</Tag>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
+            <StatusBadge status={status} />
+            {item.category && <Tag color={item.category === "GEAR" ? "gray" : item.category === "SHOES" ? "blue" : "green"}>{item.category}</Tag>}
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {item.label}
+          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {item.label || "（商品名未設定）"}
           </div>
+          {item.brand && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{item.brand}</div>}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>{item.score}点</div>
-          <div style={{ fontSize: 10, color: "var(--text-dim)" }}>UpGear</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: cfg.color }}>{item.score}点</div>
+          <div style={{ fontSize: 9, color: "var(--text-dim)" }}>UpGear</div>
         </div>
       </div>
 
-      {/* Meta row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <ScoreDot score={card?.understandingScore} />
-        {urlCount > 0 && (
-          <span style={{ fontSize: 10, color: "#6fa8dc" }}>
-            URL {urlCount}件
+      {/* Data row */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: "var(--text-dim)", alignItems: "center" }}>
+        {(rb?.price || item.price) && (
+          <span style={{ color: "var(--text)" }}>
+            ¥{Number(rb?.price || item.price).toLocaleString()}
           </span>
         )}
-        {card?.subCategory && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{card.subCategory}</span>
+        {rb?.reviewCount && (
+          <span>★{rb.reviewAverage} ({rb.reviewCount?.toLocaleString()}件)</span>
         )}
-        {item.price && (
-          <span style={{ fontSize: 10, color: "var(--text-dim)" }}>¥{Number(item.price).toLocaleString()}</span>
+        {rb?.url && (
+          <span style={{ color: "#e07b4c" }}>楽天あり</span>
+        )}
+        {item.card?.understandingScore != null && (
+          <span>理解:{item.card.understandingScore}点</span>
         )}
       </div>
 
-      {/* Card keywords preview */}
-      {card?.searchKeywords?.length > 0 && selected && (
-        <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {card.searchKeywords.slice(0, 5).map((kw) => (
-            <span key={kw} style={{ fontSize: 9, background: "var(--bg2)", border: "1px solid var(--border)", padding: "1px 6px", color: "var(--text-dim)" }}>{kw}</span>
-          ))}
-        </div>
-      )}
-
-      {/* Actions (shown when selected) */}
+      {/* Actions when selected */}
       {selected && (
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
-          <Btn small onClick={() => onWizard(item)}>
-            {card ? "再分析" : "商品理解AI"}
-          </Btn>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
+          <Btn small onClick={() => onWizard(item)}>{item.card ? "再分析" : "商品理解AI"}</Btn>
           {onNavToStudio && (
-            <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>
-              ▣ 制作スタジオ
-            </Btn>
+            <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>
           )}
         </div>
       )}
     </div>
   );
 }
+
+// ─── DetailPanel ──────────────────────────────────────────────────────────────
 
 function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
   if (!item) return (
@@ -108,6 +125,16 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
   );
 
   const card = item.card;
+  const rb = item.rakuten || card?.rakuten;
+  const status = getItemStatus(item);
+  const cfg = STATUS_CONFIG[status];
+
+  // データソースを判定
+  const sources = [];
+  if (rb) sources.push("楽天API");
+  if (card?.fetchedAt) sources.push("Playwright");
+  if (card?.whatIsThis) sources.push("Claude AI");
+  if (sources.length === 0) sources.push("手動");
 
   return (
     <div>
@@ -118,113 +145,141 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
         {onDelete && <Btn small variant="danger" onClick={() => onDelete(item.id)}>削除</Btn>}
       </div>
 
-      {/* Understanding score */}
-      {card?.understandingScore != null && (
-        <div style={{ background: "var(--bg2)", border: `2px solid ${UNDERSTANDING_COLOR(card.understandingScore)}`, padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>商品理解スコア</span>
-            <span style={{ fontSize: 22, fontWeight: 700, color: UNDERSTANDING_COLOR(card.understandingScore) }}>
-              {card.understandingScore}点
-            </span>
+      {/* Status banner */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: cfg.bg, border: `1px solid ${cfg.color}`, marginBottom: 16 }}>
+        <StatusBadge status={status} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {sources.map(s => <SourceTag key={s} source={s} />)}
+        </div>
+        {item.analysisAt && (
+          <span style={{ fontSize: 9, color: "var(--text-dim)", marginLeft: "auto" }}>
+            {new Date(item.analysisAt).toLocaleString("ja-JP")}
+          </span>
+        )}
+      </div>
+
+      {/* Missing reasons */}
+      {(item.missingReasons || []).length > 0 && (
+        <div style={{ background: "rgba(224,108,117,0.08)", border: "1px solid rgba(224,108,117,0.3)", padding: "10px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 9, color: "#e06c75", letterSpacing: "0.15em", marginBottom: 6 }}>不足情報</div>
+          {item.missingReasons.map((r, i) => (
+            <div key={i} style={{ fontSize: 10, color: "var(--text-dim)", padding: "2px 0" }}>· {r}</div>
+          ))}
+        </div>
+      )}
+
+      {/* 楽天APIデータ */}
+      <Section title="楽天API取得データ" color="#e07b4c">
+        <Row label="商品名"         value={rb?.name} source="楽天API" />
+        <Row label="価格"           value={rb?.price ? `¥${Number(rb.price).toLocaleString()}` : null} source="楽天API" />
+        <Row label="レビュー件数"   value={rb?.reviewCount ? `${rb.reviewCount.toLocaleString()}件` : null} source="楽天API" />
+        <Row label="レビュー平均"   value={rb?.reviewAverage ? `★${rb.reviewAverage}` : null} source="楽天API" />
+        <Row label="楽天商品URL"    value={rb?.url} source="楽天API" link />
+        <Row label="アフィリエイトURL" value={rb?.url} source="楽天API" link />
+        <Row label="ショップ名"     value={rb?.shopName} source="楽天API" />
+        {rb?.imageUrl && (
+          <div style={{ padding: "8px 0" }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>画像</span>
+            <img src={rb.imageUrl} alt="商品画像" style={{ maxWidth: 80, maxHeight: 80, objectFit: "contain", border: "1px solid var(--border)" }} />
           </div>
-          <div style={{ height: 4, background: "var(--border)", marginTop: 8 }}>
-            <div style={{ width: `${card.understandingScore}%`, height: "100%", background: UNDERSTANDING_COLOR(card.understandingScore) }} />
-          </div>
-          {(card.missingFields || []).length > 0 && (
-            <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 6 }}>
-              不足: {card.missingFields.join("、")}
+        )}
+        {!rb && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>楽天API未取得</div>}
+      </Section>
+
+      {/* Playwright / AI データ */}
+      <Section title="Playwright取得データ" color="#6fa8dc">
+        <Row label="ブランド"       value={card?.brand} source="Playwright" />
+        <Row label="カテゴリ"       value={card?.category ? `${card.category} > ${card.subCategory || "—"}` : null} source="Playwright" />
+        <Row label="判定根拠"       value={card?.categorySource} source="Playwright" />
+        <Row label="信頼度"         value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
+        <Row label="レビュー平均"   value={card?.reviewData?.avg ? `★${card.reviewData.avg}` : null} source="Playwright" />
+        <Row label="レビュー件数"   value={card?.reviewData?.count ? `${card.reviewData.count.toLocaleString()}件` : null} source="Playwright" />
+        {!card && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>Playwright未実行</div>}
+      </Section>
+
+      {/* Claude AI データ */}
+      {card && (
+        <Section title="Claude AI解析データ" color="#98c379">
+          {card.understandingScore != null && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>商品理解スコア</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "#98c379" }}>{card.understandingScore}点</span>
+              </div>
+              <div style={{ height: 4, background: "var(--border)" }}>
+                <div style={{ width: `${card.understandingScore}%`, height: "100%", background: "#98c379" }} />
+              </div>
+              {(card.missingFields || []).length > 0 && (
+                <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 4 }}>
+                  不足: {card.missingFields.join("、")}
+                </div>
+              )}
             </div>
           )}
-        </div>
+          <Row label="商品説明"     value={card.whatIsThis} source="Claude AI" />
+          <Row label="課題解決"     value={card.whatItSolves} source="Claude AI" />
+          <Row label="向いている人" value={card.forWho} source="Claude AI" />
+          <Row label="向いていない人" value={(card.notForWho || []).join(" / ")} source="Claude AI" />
+          <Row label="強み"         value={(card.strengths || []).join("、")} source="Claude AI" />
+          <Row label="弱み"         value={(card.weaknesses || []).join("、")} source="Claude AI" />
+        </Section>
       )}
 
-      {/* Sections */}
-      {[
-        {
-          title: "基本情報",
-          rows: [
-            ["ブランド", card?.brand || "—"],
-            ["サブカテゴリ", card?.subCategory || "—"],
-            ["商品タイプ", card?.productType || "—"],
-            ["カテゴリ判定根拠", card?.categorySource || "手動設定"],
-            ["価格", item.price ? `¥${Number(item.price).toLocaleString()}` : "—"],
-            ["UpGear判定", item.judgment],
-            ["スコア", `${item.score}点`],
-          ]
-        },
-        card ? {
-          title: "商品理解",
-          rows: [
-            ["この商品は何か", card.whatIsThis],
-            ["何を解決するか", card.whatItSolves],
-            ["なぜ売れているか", card.whySelling],
-            ["向いている人", card.forWho || "—"],
-            ["向いていない人", (card.notForWho || []).join(" / ") || "—"],
-            ["強み", (card.strengths || []).join("、")],
-            ["弱み", (card.weaknesses || []).join("、")],
-          ]
-        } : null,
-        card?.reviewData ? {
-          title: "レビュー分析",
-          rows: [
-            ["評価", `★${card.reviewData.avg} / ${card.reviewData.count?.toLocaleString()}件`],
-            ["高評価理由", (card.reviewData.highEval || []).join("、")],
-            ["低評価理由", (card.reviewData.lowEval || []).join("、")],
-            ["長期使用", card.reviewData.longTerm || "—"],
-          ]
-        } : null,
-      ].filter(Boolean).map((sec) => (
-        <div key={sec.title} style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.2em", borderLeft: "2px solid var(--accent)", paddingLeft: 8, marginBottom: 10 }}>
-            {sec.title}
-          </div>
-          {sec.rows.map(([l, v]) => v && (
-            <div key={l} style={{ display: "flex", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: 10, color: "var(--text-dim)", width: 110, flexShrink: 0 }}>{l}</span>
-              <span style={{ fontSize: 11, lineHeight: 1.5, flex: 1 }}>{v}</span>
-            </div>
-          ))}
-        </div>
-      ))}
+      {/* UpGear評価 */}
+      <Section title="UpGear評価">
+        <Row label="UpGearスコア" value={`${item.score}点`} />
+        <Row label="判定"         value={item.judgment} />
+        <Row label="価格（手動）" value={item.price ? `¥${Number(item.price).toLocaleString()}` : null} />
+      </Section>
 
-      {/* Keywords */}
+      {/* 検索キーワード */}
       {card?.searchKeywords?.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.2em", borderLeft: "2px solid var(--accent)", paddingLeft: 8, marginBottom: 10 }}>
-            検索キーワード
-          </div>
+        <Section title="検索キーワード" color="#98c379">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {card.searchKeywords.map((kw) => (
-              <span key={kw} style={{ fontSize: 11, background: "var(--bg2)", border: "1px solid var(--border)", padding: "3px 10px" }}>
-                {kw}
-              </span>
+              <span key={kw} style={{ fontSize: 11, background: "var(--bg2)", border: "1px solid var(--border)", padding: "3px 10px" }}>{kw}</span>
             ))}
           </div>
-        </div>
+        </Section>
       )}
 
-      {/* URLs */}
+      {/* 参照URL */}
       {item.urls && Object.values(item.urls).some(Boolean) && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.2em", borderLeft: "2px solid var(--accent)", paddingLeft: 8, marginBottom: 10 }}>
-            参照URL
-          </div>
+        <Section title="参照URL">
           {Object.entries(item.urls).filter(([, v]) => v).map(([k, v]) => (
             <div key={k} style={{ display: "flex", gap: 8, padding: "4px 0", alignItems: "center" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#98c379", flexShrink: 0 }} />
-              <span style={{ fontSize: 10, color: "var(--text-dim)", width: 80 }}>{k}</span>
-              <span style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</span>
+              <span style={{ fontSize: 10, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{k}</span>
+              <a href={v} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</a>
             </div>
           ))}
-        </div>
+        </Section>
       )}
+    </div>
+  );
+}
 
-      {/* Fetch timestamp */}
-      {card?.fetchedAt && (
-        <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
-          最終分析: {new Date(card.fetchedAt).toLocaleString("ja-JP")}
-        </div>
-      )}
+function Section({ title, color = "var(--accent)", children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 9, color, letterSpacing: "0.2em", borderLeft: `2px solid ${color}`, paddingLeft: 8, marginBottom: 10 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value, source, link }) {
+  if (!value) return null;
+  return (
+    <div style={{ display: "flex", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+      <span style={{ fontSize: 10, color: "var(--text-dim)", width: 110, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, lineHeight: 1.5, flex: 1, wordBreak: "break-all" }}>
+        {link ? (
+          <a href={value} target="_blank" rel="noreferrer" style={{ color: "#6fa8dc" }}>{value}</a>
+        ) : value}
+      </span>
+      {source && <SourceTag source={source} />}
     </div>
   );
 }
@@ -261,29 +316,29 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
     setSelectedId(null);
   };
 
-  const handleGoToStudio = (itemId, research) => {
-    setSelectedItemId?.(itemId);
-    onNavToStudio?.(itemId);
-  };
+  const countByStatus = (s) => items.filter((i) => getItemStatus(i) === s).length;
 
   const FILTERS = [
-    { id: "all",    label: `すべて (${items.length})` },
-    { id: "cert",   label: `認定 (${items.filter((i) => i.judgment === "認定").length})` },
-    { id: "cond",   label: `条件付き (${items.filter((i) => i.judgment === "条件付き認定").length})` },
-    { id: "nocard", label: `未分析 (${items.filter((i) => !i.card).length})` },
+    { id: "all",      label: `すべて (${items.length})` },
+    { id: "認定",     label: `認定 (${countByStatus("認定")})` },
+    { id: "条件付き", label: `条件付き (${countByStatus("条件付き")})` },
+    { id: "要確認",   label: `要確認 (${countByStatus("要確認")})` },
+    { id: "未分析",   label: `未分析 (${countByStatus("未分析")})` },
+    { id: "非認定",   label: `非認定 (${countByStatus("非認定")})` },
   ];
 
   const filtered = items.filter((i) => {
-    if (filter === "cert")   return i.judgment === "認定";
-    if (filter === "cond")   return i.judgment === "条件付き認定";
-    if (filter === "nocard") return !i.card;
-    return true;
+    if (filter === "all") return true;
+    return getItemStatus(i) === filter;
   });
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-        <PageHeader title="ストック" sub={`商品データベース — ${items.length}件 / 認定 ${items.filter((i) => i.judgment === "認定").length}件`} />
+        <PageHeader
+          title="ストック"
+          sub={`商品データベース — ${items.length}件 / 認定 ${countByStatus("認定")}件 / 条件付き ${countByStatus("条件付き")}件`}
+        />
         <Btn variant="primary" onClick={() => openWizard()}>
           + 新規アイテム登録
         </Btn>
@@ -291,17 +346,20 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
 
       {/* Filter tabs */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-        {FILTERS.map((f) => (
-          <button key={f.id} onClick={() => setFilter(f.id)} style={{
-            padding: "5px 12px", background: "none", fontFamily: "var(--font-mono)",
-            border: `1px solid ${filter === f.id ? "var(--accent)" : "var(--border)"}`,
-            color: filter === f.id ? "var(--accent)" : "var(--text-dim)",
-            fontSize: 11, cursor: "pointer",
-          }}>{f.label}</button>
-        ))}
+        {FILTERS.map((f) => {
+          const cfg = STATUS_CONFIG[f.id];
+          return (
+            <button key={f.id} onClick={() => setFilter(f.id)} style={{
+              padding: "5px 12px", background: "none", fontFamily: "var(--font-mono)",
+              border: `1px solid ${filter === f.id ? (cfg?.color || "var(--accent)") : "var(--border)"}`,
+              color: filter === f.id ? (cfg?.color || "var(--accent)") : "var(--text-dim)",
+              fontSize: 11, cursor: "pointer",
+            }}>{f.label}</button>
+          );
+        })}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 16 }}>
         {/* List */}
         <div>
           {filtered.length === 0 ? (
@@ -332,7 +390,7 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
         </div>
 
         {/* Detail panel */}
-        <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", padding: "20px 24px" }}>
+        <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", padding: "20px 24px", overflowY: "auto", maxHeight: "calc(100vh - 180px)" }}>
           <DetailPanel
             item={selectedItem}
             onWizard={openWizard}
@@ -347,7 +405,7 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
         <ItemWizard
           existingItem={wizardItem}
           onSave={handleSave}
-          onGoToStudio={handleGoToStudio}
+          onGoToStudio={(itemId) => { setSelectedItemId?.(itemId); onNavToStudio?.(itemId); }}
           onClose={() => { setShowWizard(false); setWizardItem(null); }}
         />
       )}

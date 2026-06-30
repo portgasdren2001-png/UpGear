@@ -795,6 +795,29 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
   };
 
   const handleStep3Confirm = (draft, confirmedCard) => {
+    const upgearScore = Number(draft.score) || 70;
+
+    // ─ 解析ステータスを決定 ─────────────────────────────────
+    const missingReasons = [];
+    const rb = confirmedCard.rakuten;
+    if (!rb?.price)          missingReasons.push("楽天API不足: 価格");
+    if (!rb?.reviewCount)    missingReasons.push("楽天API不足: レビュー件数");
+    if (!rb?.url)            missingReasons.push("楽天API不足: 楽天URL");
+    if (!confirmedCard.brand || confirmedCard.brand === "不明")
+                             missingReasons.push("Playwright不足: ブランド");
+    if (!confirmedCard.whatIsThis)
+                             missingReasons.push("AI未生成: 商品説明");
+    if ((confirmedCard.strengths || []).length < 2)
+                             missingReasons.push("AI未生成: 強み");
+
+    let analysisStatus;
+    if (missingReasons.length >= 4)          analysisStatus = "要確認";
+    else if (upgearScore >= 80)              analysisStatus = "認定";
+    else if (upgearScore >= 70)              analysisStatus = "条件付き";
+    else if (upgearScore < 60 && confirmedCard.whatIsThis)
+                                             analysisStatus = "非認定";
+    else                                     analysisStatus = "要確認";
+
     const item = {
       ...(existingItem || {}),
       id:       existingItem?.id || `item_${Date.now()}`,
@@ -803,12 +826,25 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
       brand:    draft.brand,
       category: draft.category,
       subCategory: draft.subCategory || confirmedCard.subCategory,
-      score:    Number(draft.score) || 70,
+      score:    upgearScore,
       price:    String(draft.price).replace(/[¥,]/g, ""),
       judgment: draft.judgment,
       urls,
       card:     { ...confirmedCard, name: draft.name, brand: draft.brand, category: draft.category },
       stock:    existingItem?.stock || { situation: "", hook: "", reveal: "", change: "", good: "", ng1: "", ng2: "", conclusion: "" },
+      // 拡張フィールド
+      analysisStatus,
+      missingReasons,
+      analysisAt: Date.now(),
+      rakuten: rb ? {
+        name:          rb.name,
+        price:         rb.price,
+        imageUrl:      rb.imageUrl,
+        url:           rb.url,
+        reviewCount:   rb.reviewCount,
+        reviewAverage: rb.reviewAverage,
+        shopName:      rb.shopName,
+      } : null,
     };
     onSave(item);
     setSavedItem(item);
