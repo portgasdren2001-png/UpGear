@@ -65,19 +65,47 @@ app.post('/api/product/understand', async (req, res) => {
     // ── STAGE: rakuten ──
     sse.emit('stage', { id: 'rakuten', status: 'running', detail: '楽天APIで商品情報を取得中' });
     let rakutenData = null;
+
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('【楽天API】接続確認');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`  RAKUTEN_APP_ID : ${process.env.RAKUTEN_APP_ID ? '✓ set' : '✗ 未設定'}`);
+    console.log(`  RAKUTEN_AFFILIATE_ID: ${process.env.RAKUTEN_AFFILIATE_ID ? '✓ set' : '✗ 未設定'}`);
+    console.log(`  検索キーワード : ${item.label || '（未入力 — URLから推定）'}`);
+
     if (process.env.RAKUTEN_APP_ID) {
       const keyword = item.label || null;
       const result = await searchRakuten({ keyword, urls });
+
+      console.log(`  API結果        : ${result.ok ? '✓ 成功' : `✗ 失敗 — ${result.reason}`}`);
+
       if (result.ok && result.best) {
         rakutenData = result;
-        sse.emit('progress', { stage: 'rakuten', detail: `楽天: 「${result.best.name.slice(0, 40)}」 ¥${result.best.price?.toLocaleString()} / レビュー${result.best.reviewCount}件` });
+        const rb = result.best;
+        console.log('\n  ─── 楽天API 取得データ ───────────────────');
+        console.log(`  [楽天] 商品名         : ${rb.name}`);
+        console.log(`  [楽天] 価格           : ¥${rb.price?.toLocaleString() ?? '—'}`);
+        console.log(`  [楽天] レビュー件数   : ${rb.reviewCount ?? '—'}件`);
+        console.log(`  [楽天] レビュー平均   : ${rb.reviewAverage ?? '—'}`);
+        console.log(`  [楽天] 楽天商品URL    : ${rb.rakutenUrl ?? '—'}`);
+        console.log(`  [楽天] アフィリエイトURL: ${rb.rakutenUrl ?? '（affiliateId未設定）'}`);
+        console.log(`  [楽天] 画像URL        : ${rb.imageUrl ?? '—'}`);
+        console.log(`  [楽天] ショップ名     : ${rb.shopName ?? '—'}`);
+        console.log(`  [楽天] キャッチコピー : ${rb.catchCopy?.slice(0, 60) ?? '—'}`);
+        console.log(`  [楽天] 総ヒット件数   : ${result.totalCount}件`);
+        console.log('  ──────────────────────────────────────────');
+
+        sse.emit('progress', { stage: 'rakuten', detail: `[楽天API] 「${rb.name.slice(0, 35)}」 ¥${rb.price?.toLocaleString()} / レビュー${rb.reviewCount}件 (★${rb.reviewAverage})` });
         sse.emit('rakutenResult', { rakuten: result });
       } else {
-        sse.emit('progress', { stage: 'rakuten', detail: `楽天スキップ: ${result.reason}` });
+        console.log(`  取得失敗理由   : ${result.reason}`);
+        sse.emit('progress', { stage: 'rakuten', detail: `[楽天API] スキップ: ${result.reason}` });
       }
     } else {
-      sse.emit('progress', { stage: 'rakuten', detail: 'RAKUTEN_APP_ID未設定 — スキップ' });
+      console.log('  → RAKUTEN_APP_ID未設定のためスキップ');
+      sse.emit('progress', { stage: 'rakuten', detail: '[楽天API] RAKUTEN_APP_ID未設定 — スキップ' });
     }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     sse.emit('stage', { id: 'rakuten', status: 'done' });
 
     // ── STAGE: fetch + parse ──
@@ -97,15 +125,38 @@ app.post('/api/product/understand', async (req, res) => {
       scraped = buildFallbackScraped(urls);
     }
 
+    // ── Playwright 取得データ ログ ──
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('【Playwright】取得データ');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`  [Playwright] タイトル     : ${scraped.title || '—'}`);
+    console.log(`  [Playwright] h1           : ${scraped.h1 || '—'}`);
+    console.log(`  [Playwright] パンくず     : ${scraped.breadcrumbs?.join(' > ') || '—'}`);
+    console.log(`  [Playwright] レビュー平均 : ${scraped.reviewSummary?.avg ?? '—'}`);
+    console.log(`  [Playwright] レビュー件数 : ${scraped.reviewSummary?.count ?? '—'}件`);
+    console.log(`  [Playwright] 画像数       : ${scraped.images?.length ?? 0}件`);
+    console.log(`  [Playwright] JSON-LD数    : ${scraped.jsonLd?.length ?? 0}件`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
     // 楽天データをスクレイプ結果にマージ（Playwrightで取れなかった項目を補完）
     if (rakutenData?.best) {
       const rb = rakutenData.best;
-      if (!scraped.reviewSummary.avg && rb.reviewAverage)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('【データマージ】楽天 → Playwright 補完');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      if (!scraped.reviewSummary.avg && rb.reviewAverage) {
         scraped.reviewSummary.avg = rb.reviewAverage;
-      if (!scraped.reviewSummary.count && rb.reviewCount)
+        console.log(`  レビュー平均 → 楽天から補完: ${rb.reviewAverage}`);
+      }
+      if (!scraped.reviewSummary.count && rb.reviewCount) {
         scraped.reviewSummary.count = rb.reviewCount;
-      if (rb.imageUrl && !scraped.images.includes(rb.imageUrl))
+        console.log(`  レビュー件数 → 楽天から補完: ${rb.reviewCount}件`);
+      }
+      if (rb.imageUrl && !scraped.images.includes(rb.imageUrl)) {
         scraped.images.unshift(rb.imageUrl);
+        console.log(`  画像 → 楽天から先頭に追加: ${rb.imageUrl}`);
+      }
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       scraped.rakuten = {
         name: rb.name,
         price: rb.price,
