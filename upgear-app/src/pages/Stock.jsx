@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { PageHeader, Tag, Btn } from "../components/ui";
+import { MAIN_CATEGORIES, CATEGORY_TREE } from "../data/productUnderstandingAI";
 import ItemWizard from "./ItemWizard";
 
 // ─── ステータス定義 ────────────────────────────────────────────────────────────
@@ -71,7 +72,12 @@ function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
             <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
             <StatusBadge status={status} />
-            {item.category && <Tag color={item.category === "GEAR" ? "gray" : item.category === "SHOES" ? "blue" : "green"}>{item.category}</Tag>}
+            {(item.mainCategory || item.category) && (
+              <Tag color="gray">{item.mainCategory || item.category}</Tag>
+            )}
+            {item.subCategory && (
+              <Tag color="blue">{item.subCategory}</Tag>
+            )}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {item.label || "（商品名未設定）"}
@@ -189,7 +195,8 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
       {/* Playwright / AI データ */}
       <Section title="Playwright取得データ" color="#6fa8dc">
         <Row label="ブランド"       value={card?.brand} source="Playwright" />
-        <Row label="カテゴリ"       value={card?.category ? `${card.category} > ${card.subCategory || "—"}` : null} source="Playwright" />
+        <Row label="大カテゴリ"     value={item.mainCategory || card?.mainCategory || card?.category} source="Playwright" />
+        <Row label="小カテゴリ"     value={item.subCategory || card?.subCategory} source="Playwright" />
         <Row label="判定根拠"       value={card?.categorySource} source="Playwright" />
         <Row label="信頼度"         value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
         <Row label="レビュー平均"   value={card?.reviewData?.avg ? `★${card.reviewData.avg}` : null} source="Playwright" />
@@ -292,6 +299,8 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
   const [showWizard, setShowWizard] = useState(false);
   const [wizardItem, setWizardItem] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [catFilter, setCatFilter] = useState("all");
+  const [subCatFilter, setSubCatFilter] = useState("all");
 
   const selectedItem = items.find((i) => i.id === selectedId) || null;
 
@@ -327,10 +336,19 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
     { id: "非認定",   label: `非認定 (${countByStatus("非認定")})` },
   ];
 
+  const getItemMainCat = (i) => i.mainCategory || i.category || "";
+  const getItemSubCat  = (i) => i.subCategory || "";
+
   const filtered = items.filter((i) => {
-    if (filter === "all") return true;
-    return getItemStatus(i) === filter;
+    if (filter !== "all" && getItemStatus(i) !== filter) return false;
+    if (catFilter !== "all" && getItemMainCat(i) !== catFilter) return false;
+    if (subCatFilter !== "all" && getItemSubCat(i) !== subCatFilter) return false;
+    return true;
   });
+
+  const subCatsInCurrentFilter = catFilter !== "all"
+    ? (CATEGORY_TREE[catFilter]?.subCategories || [])
+    : [];
 
   return (
     <div>
@@ -344,7 +362,46 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
         </Btn>
       </div>
 
-      {/* Filter tabs */}
+      {/* Category filter */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {[{ id: "all", label: `すべて (${items.length})` }, ...MAIN_CATEGORIES.map(c => ({
+          id: c,
+          label: `${c} (${items.filter(i => getItemMainCat(i) === c).length})`,
+        }))].map((f) => (
+          <button key={f.id} onClick={() => { setCatFilter(f.id); setSubCatFilter("all"); }} style={{
+            padding: "4px 10px", background: "none", fontFamily: "var(--font-mono)",
+            border: `1px solid ${catFilter === f.id ? "var(--accent)" : "var(--border)"}`,
+            color: catFilter === f.id ? "var(--accent)" : "var(--text-dim)",
+            fontSize: 10, cursor: "pointer",
+          }}>{f.label}</button>
+        ))}
+      </div>
+
+      {/* Sub-category filter (shows only when a main category is selected) */}
+      {subCatsInCurrentFilter.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8, paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
+          <button onClick={() => setSubCatFilter("all")} style={{
+            padding: "3px 8px", background: "none", fontFamily: "var(--font-mono)",
+            border: `1px solid ${subCatFilter === "all" ? "var(--accent)" : "var(--border)"}`,
+            color: subCatFilter === "all" ? "var(--accent)" : "var(--text-dim)",
+            fontSize: 9, cursor: "pointer",
+          }}>すべて</button>
+          {subCatsInCurrentFilter.map((s) => {
+            const cnt = items.filter(i => getItemMainCat(i) === catFilter && getItemSubCat(i) === s).length;
+            if (cnt === 0) return null;
+            return (
+              <button key={s} onClick={() => setSubCatFilter(s)} style={{
+                padding: "3px 8px", background: "none", fontFamily: "var(--font-mono)",
+                border: `1px solid ${subCatFilter === s ? "#6fa8dc" : "var(--border)"}`,
+                color: subCatFilter === s ? "#6fa8dc" : "var(--text-dim)",
+                fontSize: 9, cursor: "pointer",
+              }}>{s} ({cnt})</button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Status filter tabs */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
         {FILTERS.map((f) => {
           const cfg = STATUS_CONFIG[f.id];

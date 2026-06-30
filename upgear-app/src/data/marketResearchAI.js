@@ -528,9 +528,15 @@ const SNS_RANKS = {
   ],
 };
 
+function resolveLegacyCat(item) {
+  const cat = item.mainCategory || item.category || "GEAR";
+  const map = { ガジェット: "GEAR", バッグ: "GEAR", アパレル: "WEAR", デスク環境: "GEAR", EDC: "GEAR", トラベル: "GEAR", その他: "GEAR" };
+  return map[cat] || (["GEAR","SHOES","WEAR"].includes(cat) ? cat : "GEAR");
+}
+
 export function genSNSPlatformRanking(item) {
-  const cat = item.category || "GEAR";
-  return SNS_RANKS[cat] || SNS_RANKS.GEAR;
+  const key = resolveLegacyCat(item);
+  return SNS_RANKS[key] || SNS_RANKS.GEAR;
 }
 
 // ─── ⑩ Post Strategy ─────────────────────────────────────────────────────────
@@ -538,7 +544,7 @@ export function genSNSPlatformRanking(item) {
 export function genPostStrategy(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const cat_key = item.category || "GEAR";
+  const cat_key = resolveLegacyCat(item);
   const snsRanks = SNS_RANKS[cat_key] || SNS_RANKS.GEAR;
   const topPlatform = snsRanks[0].platform;
 
@@ -741,8 +747,8 @@ export function genPrePostStrategy(item) {
   const s = item.stock || {};
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const catAudienceMap = { GEAR: "全デスクワーカー", SHOES: "通勤者・外出者全員", WEAR: "毎日服を選ぶ人全員" };
-  const audience = catAudienceMap[item.category] || "アイテムを探している人";
+  const catAudienceMap = { GEAR: "全デスクワーカー", SHOES: "通勤者・外出者全員", WEAR: "毎日服を選ぶ人全員", ガジェット: "全デスクワーカー", バッグ: "バッグを探している人", アパレル: "毎日服を選ぶ人全員", デスク環境: "テレワーカー全員", EDC: "毎日持ち歩くものを探している人", トラベル: "よく旅行する人" };
+  const audience = catAudienceMap[item.mainCategory || item.category] || "アイテムを探している人";
 
   return [
     {
@@ -866,7 +872,7 @@ function fillKeywords(list, item) {
 // ─── Main research runner ─────────────────────────────────────────────────────
 
 export function runMarketResearch(item) {
-  const cat = item.category || "GEAR";
+  const cat = resolveLegacyCat(item);
   const reviewDB = REVIEW_DB[cat] || REVIEW_DB.GEAR;
   const snsDB = SNS_DB[cat] || SNS_DB.GEAR;
   const searchDB = SEARCH_KEYWORDS_DB[cat] || SEARCH_KEYWORDS_DB.GEAR;
@@ -1006,8 +1012,8 @@ export function getTopRecommendations(item, learningData) {
   const nick = getNick(item);
   const cat = getCatWord(item);
   const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "";
-  const catAudience = { GEAR: "全デスクワーカー", SHOES: "通勤者・外出者全員", WEAR: "毎日服を選ぶ人全員" };
-  const audienceDesc = catAudience[item.category] || "アイテムを探している人";
+  const catAudience = { GEAR: "全デスクワーカー", SHOES: "通勤者・外出者全員", WEAR: "毎日服を選ぶ人全員", ガジェット: "全デスクワーカー", バッグ: "バッグを探している人", アパレル: "毎日服を選ぶ人全員", デスク環境: "テレワーカー全員", EDC: "毎日持ち歩くものを探している人", トラベル: "よく旅行する人" };
+  const audienceDesc = catAudience[item.mainCategory || item.category] || "アイテムを探している人";
 
   // ① バズ型 (B型) — 逆張り・一人称・非フォロワー配信狙い
   const buzzTheme = `普通の${cat}をやめた日から変わったこと`;
@@ -1120,5 +1126,8 @@ function getNick(item) {
 }
 
 function getCatWord(item) {
-  return { GEAR: "ガジェット", SHOES: "靴", WEAR: "服" }[item.category] || "アイテム";
+  const key = resolveLegacyCat(item);
+  const cat = item.mainCategory || item.category || "";
+  const map = { GEAR: "ガジェット", SHOES: "靴", WEAR: "服", ガジェット: "ガジェット", バッグ: "バッグ", アパレル: "服", デスク環境: "デスクアイテム", EDC: "EDCギア", トラベル: "トラベルグッズ" };
+  return map[cat] || map[key] || item.subCategory || "アイテム";
 }

@@ -6,6 +6,8 @@ import {
   URL_TYPE_LABELS,
   FETCH_STAGES,
   calcUnderstandingScore,
+  CATEGORY_TREE,
+  MAIN_CATEGORIES,
 } from "../data/productUnderstandingAI";
 import { runMarketResearch } from "../data/marketResearchAI";
 
@@ -27,7 +29,7 @@ const J_OPTIONS = [
   { v: "非認定",      label: "非認定（49点以下）" },
 ];
 
-const CAT_OPTIONS = ["GEAR", "SHOES", "WEAR"];
+// カテゴリはCATEGORY_TREEから動的生成
 
 const UNDERSTANDING_COLOR = (s) =>
   s >= 90 ? "#98c379" : s >= 70 ? "var(--accent)" : "#e06c75";
@@ -457,13 +459,13 @@ function Step2({ urls, item, onComplete, onBack }) {
 function Step3({ card, item, onConfirm, onEdit }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
-    name:       card.name,
-    brand:      card.brand,
-    category:   card.category,
-    subCategory: card.subCategory,
-    price:      item.price || "",
-    judgment:   item.judgment || "保留",
-    score:      item.score || 70,
+    name:         card.name,
+    brand:        card.brand,
+    mainCategory: card.mainCategory || card.category || "ガジェット",
+    subCategory:  card.subCategory || "",
+    price:        item.price || "",
+    judgment:     item.judgment || "保留",
+    score:        item.score || 70,
   });
 
   const set = (k, v) => setDraft((prev) => ({ ...prev, [k]: v }));
@@ -503,9 +505,18 @@ function Step3({ card, item, onConfirm, onEdit }) {
               </div>
             ))}
             <div>
-              <label style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>カテゴリ</label>
-              <select value={draft.category} onChange={(e) => set("category", e.target.value)} style={inputStyle}>
-                {CAT_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+              <label style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>大カテゴリ</label>
+              <select value={draft.mainCategory} onChange={(e) => set("mainCategory", e.target.value)} style={inputStyle}>
+                {MAIN_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>小カテゴリ</label>
+              <select value={draft.subCategory} onChange={(e) => set("subCategory", e.target.value)} style={inputStyle}>
+                <option value="">（未選択）</option>
+                {(CATEGORY_TREE[draft.mainCategory]?.subCategories || []).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -519,7 +530,7 @@ function Step3({ card, item, onConfirm, onEdit }) {
           <>
             <CardRow label="商品名" value={draft.name} accent />
             <CardRow label="ブランド" value={draft.brand} />
-            <CardRow label="カテゴリ" value={`${draft.category} > ${card.subCategory}`} />
+            <CardRow label="カテゴリ" value={`${draft.mainCategory}${draft.subCategory ? " > " + draft.subCategory : ""}`} />
             <CardRow label="商品タイプ" value={card.productType} />
             <CardRow label="価格" value={draft.price ? `¥${Number(draft.price).toLocaleString()}` : "—"} />
             <CardRow label="UpGear判定" value={draft.judgment} />
@@ -601,7 +612,7 @@ function Step3({ card, item, onConfirm, onEdit }) {
         <div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>この内容でストックに登録しますか？</div>
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginTop: 2 }}>
-            カテゴリ: <strong>{draft.category}</strong> ／ {draft.subCategory} ／ 市場: {card.productType}
+            カテゴリ: <strong>{draft.mainCategory}</strong> ／ {draft.subCategory || "—"} ／ 市場: {card.productType}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -629,7 +640,7 @@ function Step4({ savedItem, onNext }) {
       <div style={{ background: "var(--bg2)", border: "1px solid #98c379", padding: "16px", marginBottom: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "#98c379" }}>{savedItem.label}</div>
         {[
-          ["カテゴリ", savedItem.category],
+          ["カテゴリ", `${savedItem.mainCategory || savedItem.category}${savedItem.subCategory ? " > " + savedItem.subCategory : ""}`],
           ["ブランド", savedItem.card?.brand || "—"],
           ["スコア", `${savedItem.score}点`],
           ["商品理解スコア", `${savedItem.card?.understandingScore}点`],
@@ -822,15 +833,16 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
       ...(existingItem || {}),
       id:       existingItem?.id || `item_${Date.now()}`,
       no:       existingItem?.no || "—",
-      label:    draft.name,
-      brand:    draft.brand,
-      category: draft.category,
-      subCategory: draft.subCategory || confirmedCard.subCategory,
+      label:        draft.name,
+      brand:        draft.brand,
+      mainCategory: draft.mainCategory,
+      category:     draft.mainCategory,  // 後方互換
+      subCategory:  draft.subCategory || confirmedCard.subCategory,
       score:    upgearScore,
       price:    String(draft.price).replace(/[¥,]/g, ""),
       judgment: draft.judgment,
       urls,
-      card:     { ...confirmedCard, name: draft.name, brand: draft.brand, category: draft.category },
+      card:     { ...confirmedCard, name: draft.name, brand: draft.brand, mainCategory: draft.mainCategory, category: draft.mainCategory },
       stock:    existingItem?.stock || { situation: "", hook: "", reveal: "", change: "", good: "", ng1: "", ng2: "", conclusion: "" },
       // 拡張フィールド
       analysisStatus,

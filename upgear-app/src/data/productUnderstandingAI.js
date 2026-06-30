@@ -22,73 +22,143 @@ export const URL_TYPE_LABELS = {
   official: "公式サイト / レビューサイト",
 };
 
-// ─── Category databases ───────────────────────────────────────────────────────
+// ─── Category tree ────────────────────────────────────────────────────────────
+// UpGearコンセプト: 「ギア」は思想（判断を減らす装備）であり、カテゴリではない
 
-const CAT_DB = {
-  GEAR: {
-    subCategories: ["トラックボール", "マウス", "キーボード", "ヘッドセット", "イヤホン", "充電器", "バックパック", "財布", "時計", "カメラ"],
-    productType: "ガジェット・道具",
-    market: "デスクワーカー・テクノロジー市場",
-    keywords: ["時短", "仕事効率", "デスク環境", "QOL", "ガジェット", "テレワーク", "コスパ", "ルーティン", "毎日使う", "買ってよかった"],
-    useCases: ["毎日のデスクワーク", "テレワーク環境構築", "移動中の作業", "趣味・クリエイター用途"],
-    competitors: ["Amazon Basics", "Logicool", "Anker", "Belkin", "サードパーティー製"],
-    strengthPatterns: ["毎日使える耐久性", "作業効率の向上", "セットアップが簡単", "コンパクトで持ち運びやすい"],
-    weaknessPatterns: ["慣れるまでに時間がかかる", "価格が高め", "設定アプリの品質にムラ"],
+export const CATEGORY_TREE = {
+  ガジェット: {
+    subCategories: ["イヤホン", "ヘッドホン", "マウス", "トラックボール", "キーボード", "モニター", "電気シェーバー", "モバイルバッテリー", "充電器", "ケーブル", "スマートウォッチ", "カメラ", "その他"],
+    productType: "ガジェット",
+    legacyCat: "GEAR",
+    keywords: ["時短", "仕事効率", "ガジェット", "テレワーク", "コスパ", "毎日使う", "買ってよかった"],
+    useCases: ["毎日のデスクワーク", "テレワーク環境構築", "移動中の作業"],
+    competitors: ["Logicool", "Anker", "ELECOM", "Belkin"],
+    strengthPatterns: ["毎日使える耐久性", "作業効率の向上", "セットアップが簡単"],
+    weaknessPatterns: ["慣れるまでに時間がかかる", "価格が高め"],
   },
-  SHOES: {
-    subCategories: ["スニーカー", "トレランシューズ", "ビジネスシューズ", "サンダル", "ブーツ", "ランニングシューズ"],
-    productType: "フットウェア",
-    market: "シューズ・ファッション市場",
-    keywords: ["通勤", "足疲れ", "防水", "コーデ", "毎日履ける", "サイズ感", "長持ち", "歩きやすい", "靴選び"],
-    useCases: ["毎日の通勤", "長時間の歩行", "雨の日", "アウトドア", "カジュアルシーン"],
-    competitors: ["Nike", "adidas", "New Balance", "HOKA", "On", "Salomon"],
-    strengthPatterns: ["履きやすさ・快適性", "耐久性・長期コスパ", "オールシーズン対応", "コーデの汎用性"],
-    weaknessPatterns: ["サイズ感が特殊", "初期の硬さ", "価格が高め", "デザインの好み分かれる"],
+  バッグ: {
+    subCategories: ["リュック", "ショルダー", "トート", "クラッチ", "ウエストバッグ", "その他"],
+    productType: "バッグ",
+    legacyCat: "GEAR",
+    keywords: ["毎日持てる", "通勤バッグ", "軽量", "大容量", "防水", "ガジェット収納"],
+    useCases: ["毎日の通勤", "旅行・出張", "デイリーユース"],
+    competitors: ["PORTER", "Gregory", "Aer", "Peak Design"],
+    strengthPatterns: ["収納力と整理しやすさ", "耐久性", "デザインの汎用性"],
+    weaknessPatterns: ["価格が高め", "サイズ感の個人差"],
   },
-  WEAR: {
-    subCategories: ["アウター", "ジャケット", "Tシャツ", "パンツ", "インナー", "パーカー"],
+  アパレル: {
+    subCategories: ["シューズ", "ジャケット", "アウター", "シャツ", "パンツ", "インナー", "パーカー", "その他"],
     productType: "アパレル",
-    market: "ファッション・ミニマリスト市場",
-    keywords: ["着回し", "ミニマリスト", "毎日同じ服", "コーデ不要", "長持ち", "シンプル", "洗濯機可", "防水"],
-    useCases: ["毎日の通勤", "休日のカジュアル", "アウトドア", "旅行"],
+    legacyCat: "WEAR",
+    keywords: ["着回し", "ミニマリスト", "毎日使える", "コーデ不要", "長持ち", "シンプル"],
+    useCases: ["毎日の通勤", "休日のカジュアル", "アウトドア"],
     competitors: ["ユニクロ", "無印良品", "パタゴニア", "アークテリクス", "ノースフェイス"],
-    strengthPatterns: ["着回しやすさ", "高耐久・長期コスパ", "シンプルデザイン", "機能性（防水・防風）"],
-    weaknessPatterns: ["価格が高め", "サイズ感要確認", "流行を追えない"],
+    strengthPatterns: ["着回しやすさ", "高耐久・長期コスパ", "シンプルデザイン"],
+    weaknessPatterns: ["価格が高め", "サイズ感要確認"],
+  },
+  デスク環境: {
+    subCategories: ["デスク", "チェア", "モニターアーム", "照明", "スピーカー", "Webカメラ", "マイク", "ケーブル管理", "その他"],
+    productType: "デスク環境",
+    legacyCat: "GEAR",
+    keywords: ["デスク環境", "テレワーク", "在宅勤務", "集中力", "作業効率"],
+    useCases: ["在宅ワーク環境構築", "配信・クリエイター環境", "快適な作業スペース"],
+    competitors: ["Flexispot", "Ergotron", "BenQ", "Elgato"],
+    strengthPatterns: ["作業環境の質向上", "姿勢改善", "集中力アップ"],
+    weaknessPatterns: ["設置スペースが必要", "価格が高め", "組み立てが大変"],
+  },
+  EDC: {
+    subCategories: ["財布", "キーケース", "時計", "ペン", "ライト", "マルチツール", "ノート", "その他"],
+    productType: "EDC（毎日携帯品）",
+    legacyCat: "GEAR",
+    keywords: ["毎日持ち歩く", "EDC", "ミニマル財布", "日常使い", "頑丈"],
+    useCases: ["毎日のポケット", "外出時の必携品", "ミニマルライフ"],
+    competitors: ["ABRASUS", "HIGHTIDE", "Leatherman"],
+    strengthPatterns: ["毎日持てるコンパクトさ", "高耐久", "シンプルで使いやすい"],
+    weaknessPatterns: ["容量が少ない", "価格が高め"],
+  },
+  トラベル: {
+    subCategories: ["スーツケース", "トラベルポーチ", "圧縮袋", "トラベル枕", "変換プラグ", "パッキングキューブ", "その他"],
+    productType: "トラベルグッズ",
+    legacyCat: "GEAR",
+    keywords: ["旅行", "出張", "パッキング", "手荷物", "軽量化"],
+    useCases: ["国内旅行", "海外出張", "ミニマムパッキング"],
+    competitors: ["Muji", "RIMOWA", "Away", "Aer"],
+    strengthPatterns: ["旅の快適性向上", "軽量・コンパクト", "整理しやすい"],
+    weaknessPatterns: ["旅行時のみ使用", "価格が高め"],
+  },
+  その他: {
+    subCategories: ["その他"],
+    productType: "その他",
+    legacyCat: "GEAR",
+    keywords: ["便利", "QOL", "日常使い"],
+    useCases: ["日常生活"],
+    competitors: [],
+    strengthPatterns: ["使いやすさ", "コスパ"],
+    weaknessPatterns: ["汎用品との差別化"],
   },
 };
 
+export const MAIN_CATEGORIES = Object.keys(CATEGORY_TREE);
+
+// 後方互換: legacyCatへのマッピング
+function getLegacyCat(mainCategory) {
+  return CATEGORY_TREE[mainCategory]?.legacyCat || "GEAR";
+}
+
+// 旧CAT_DBとの互換レイヤー（contentAI/marketResearchAIで使用）
+const CAT_DB = Object.fromEntries(
+  Object.entries(CATEGORY_TREE).map(([key, val]) => [key, val])
+);
+// 旧キーでのアクセスも維持
+CAT_DB.GEAR = CATEGORY_TREE.ガジェット;
+CAT_DB.SHOES = CATEGORY_TREE.アパレル;
+CAT_DB.WEAR  = CATEGORY_TREE.アパレル;
+
 const BRAND_LIST = [
-  { name: "ELECOM",       cat: "GEAR" },
-  { name: "Logicool",     cat: "GEAR" },
-  { name: "Anker",        cat: "GEAR" },
-  { name: "Technics",     cat: "GEAR" },
-  { name: "PORTER",       cat: "GEAR" },
-  { name: "無印良品",      cat: "GEAR" },
-  { name: "Salomon",      cat: "SHOES" },
-  { name: "New Balance",  cat: "SHOES" },
-  { name: "Nike",         cat: "SHOES" },
-  { name: "adidas",       cat: "SHOES" },
-  { name: "HOKA",         cat: "SHOES" },
-  { name: "THE NORTH FACE", cat: "WEAR" },
-  { name: "Arc'teryx",    cat: "WEAR" },
-  { name: "Patagonia",    cat: "WEAR" },
-  { name: "ユニクロ",      cat: "WEAR" },
+  { name: "ELECOM",         mainCat: "ガジェット" },
+  { name: "Logicool",       mainCat: "ガジェット" },
+  { name: "Anker",          mainCat: "ガジェット" },
+  { name: "Technics",       mainCat: "ガジェット" },
+  { name: "Philips",        mainCat: "ガジェット" },
+  { name: "Bose",           mainCat: "ガジェット" },
+  { name: "Sony",           mainCat: "ガジェット" },
+  { name: "PORTER",         mainCat: "バッグ" },
+  { name: "Gregory",        mainCat: "バッグ" },
+  { name: "Aer",            mainCat: "バッグ" },
+  { name: "無印良品",        mainCat: "アパレル" },
+  { name: "Salomon",        mainCat: "アパレル" },
+  { name: "New Balance",    mainCat: "アパレル" },
+  { name: "Nike",           mainCat: "アパレル" },
+  { name: "adidas",         mainCat: "アパレル" },
+  { name: "HOKA",           mainCat: "アパレル" },
+  { name: "THE NORTH FACE", mainCat: "アパレル" },
+  { name: "Arc'teryx",      mainCat: "アパレル" },
+  { name: "Patagonia",      mainCat: "アパレル" },
+  { name: "ユニクロ",        mainCat: "アパレル" },
+  { name: "Flexispot",      mainCat: "デスク環境" },
+  { name: "Ergotron",       mainCat: "デスク環境" },
 ];
 
 function detectBrand(label = "") {
   for (const b of BRAND_LIST) {
     if (label.toLowerCase().includes(b.name.toLowerCase())) {
-      return { brand: b.name, inferredCat: b.cat };
+      return { brand: b.name, inferredMainCat: b.mainCat };
     }
   }
   const first = label.split(/[\s\-_（(]/)[0];
-  return { brand: first || "不明", inferredCat: null };
+  return { brand: first || "不明", inferredMainCat: null };
 }
 
-function detectSubCategory(label = "", cat = "GEAR") {
-  const db = CAT_DB[cat] || CAT_DB.GEAR;
-  for (const sub of db.subCategories) {
-    if (label.toLowerCase().includes(sub.toLowerCase())) return sub;
+// label全体をすべての大カテゴリの小カテゴリリストで検索する
+function detectSubCategory(label = "", mainCat = null) {
+  const searchIn = mainCat ? [mainCat] : MAIN_CATEGORIES;
+  for (const cat of searchIn) {
+    const db = CATEGORY_TREE[cat];
+    if (!db) continue;
+    for (const sub of db.subCategories) {
+      if (sub === "その他") continue;
+      if (label.toLowerCase().includes(sub.toLowerCase())) return { mainCat: cat, subCat: sub };
+    }
   }
   return null;
 }
@@ -97,22 +167,23 @@ function detectSubCategory(label = "", cat = "GEAR") {
 // Priority: official > amazon > rakuten > kakaku > description > review > vision > inference
 
 function determineCategoryFromUrls(urls = {}) {
-  // Phase 2: parse actual page HTML for breadcrumbs/category
-  // Phase 1: heuristic from URL domain patterns
   const urlTypes = Object.entries(urls)
     .filter(([, v]) => v)
-    .map(([k, v]) => ({ type: k, url: v, urlType: detectUrlType(v) }));
+    .map(([k, v]) => ({ type: k, url: v }));
 
-  if (urlTypes.length === 0) return { cat: null, source: "なし", confidence: 0 };
+  if (urlTypes.length === 0) return { mainCat: null, source: "なし", confidence: 0 };
 
-  // Simulate category signal from URL structure
   for (const { url } of urlTypes) {
-    if (/shoes|footwear|sneaker|boot|sandal/i.test(url)) return { cat: "SHOES", source: "URL構造", confidence: 75 };
-    if (/jacket|wear|apparel|clothing|fashion/i.test(url)) return { cat: "WEAR", source: "URL構造", confidence: 75 };
-    if (/gear|gadget|device|electronics|pc/i.test(url)) return { cat: "GEAR", source: "URL構造", confidence: 75 };
+    if (/shoes|footwear|sneaker|boot|sandal/i.test(url))        return { mainCat: "アパレル",   source: "URL構造", confidence: 75 };
+    if (/jacket|wear|apparel|clothing|fashion/i.test(url))      return { mainCat: "アパレル",   source: "URL構造", confidence: 75 };
+    if (/bag|backpack|rucksack/i.test(url))                     return { mainCat: "バッグ",     source: "URL構造", confidence: 75 };
+    if (/desk|chair|monitor.arm|lighting/i.test(url))           return { mainCat: "デスク環境", source: "URL構造", confidence: 75 };
+    if (/travel|suitcase|luggage/i.test(url))                   return { mainCat: "トラベル",   source: "URL構造", confidence: 75 };
+    if (/wallet|edc|keychain|flashlight/i.test(url))            return { mainCat: "EDC",        source: "URL構造", confidence: 75 };
+    if (/gear|gadget|device|electronics|pc|earphone|keyboard/i.test(url)) return { mainCat: "ガジェット", source: "URL構造", confidence: 75 };
   }
 
-  return { cat: null, source: "推定", confidence: 30 };
+  return { mainCat: null, source: "推定", confidence: 30 };
 }
 
 // ─── Understanding score ──────────────────────────────────────────────────────
@@ -142,17 +213,21 @@ export function generateProductUnderstanding(item) {
   const label = item.label || "";
   const urls  = item.urls || {};
   const urlCount = Object.values(urls).filter(Boolean).length;
-  const { brand, inferredCat } = detectBrand(label);
+  const { brand, inferredMainCat } = detectBrand(label);
 
   // Category determination chain
   const catFromUrl = determineCategoryFromUrls(urls);
-  const catFromBrand = inferredCat;
-  const catFromUrl2 = catFromUrl.cat;
-  const finalCat = catFromUrl2 || catFromBrand || "GEAR";
-  const catSource = catFromUrl2 ? catFromUrl.source : catFromBrand ? "ブランドDB" : "AI推論";
+  const mainCatFromUrl = catFromUrl.mainCat;
+  const finalMainCat = mainCatFromUrl || inferredMainCat || (() => {
+    // labelから小カテゴリを検索して大カテゴリを推定
+    const found = detectSubCategory(label, null);
+    return found?.mainCat || "ガジェット";
+  })();
+  const catSource = mainCatFromUrl ? catFromUrl.source : inferredMainCat ? "ブランドDB" : "AI推論";
 
-  const db = CAT_DB[finalCat] || CAT_DB.GEAR;
-  const subCat = detectSubCategory(label, finalCat);
+  const db = CATEGORY_TREE[finalMainCat] || CATEGORY_TREE.ガジェット;
+  const subCatResult = detectSubCategory(label, finalMainCat);
+  const subCat = subCatResult?.subCat || null;
   const score = Number(item.score) || 70;
   const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "—";
 
@@ -176,7 +251,8 @@ export function generateProductUnderstanding(item) {
     model:        "",
     priceRange:   price,
     releaseDate:  "不明",
-    category:     finalCat,
+    mainCategory: finalMainCat,
+    category:     finalMainCat,   // 後方互換
     categorySource: catSource,
     subCategory:  subCat,
     productType:  db.productType,
@@ -187,7 +263,7 @@ export function generateProductUnderstanding(item) {
     warranty:     "不明",
 
     // ── 商品理解 ──
-    whatIsThis:   `${label}は${db.productType}カテゴリの製品。${subCat}として分類。`,
+    whatIsThis:   `${label}は${db.productType}カテゴリの製品。${subCat ? subCat + "として分類。" : ""}`,
     whatItSolves: `${db.useCases[0]}での課題を解決する。`,
     whySelling:   `${db.strengthPatterns[0]}が支持を集めている。`,
     forWho:       item.stock?.ng1 ? null : `${db.useCases.slice(0, 2).join("、")}をする人`,
@@ -218,11 +294,8 @@ export function generateProductUnderstanding(item) {
     // ── 検索キーワード ──
     searchKeywords: [
       ...db.keywords.slice(0, 5),
-      `${subCat} おすすめ`,
-      `${subCat} 比較`,
+      ...(subCat ? [`${subCat} おすすめ`, `${subCat} 比較`, `${subCat} デメリット`, `${subCat} 向いてない人`] : []),
       `${brand} レビュー`,
-      `${subCat} デメリット`,
-      `${subCat} 向いてない人`,
     ],
 
     // ── Meta ──

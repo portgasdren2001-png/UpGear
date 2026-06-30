@@ -27,8 +27,14 @@ const MARKET = {
   },
 };
 
+function resolveMarketKey(category) {
+  if (MARKET[category]) return category;
+  const map = { ガジェット: "GEAR", バッグ: "GEAR", アパレル: "WEAR", デスク環境: "GEAR", EDC: "GEAR", トラベル: "GEAR" };
+  return map[category] || "GEAR";
+}
+
 export function getMarketResearch(category) {
-  return MARKET[category] || MARKET.GEAR;
+  return MARKET[resolveMarketKey(category)];
 }
 
 // ─── Theme Generation ─────────────────────────────────────────────────────────
@@ -504,5 +510,7 @@ function getNick(item) {
 }
 
 function getCatWord(item) {
-  return { GEAR: "ガジェット", SHOES: "靴", WEAR: "服" }[item.category] || "アイテム";
+  const cat = item.mainCategory || item.category || "";
+  const map = { GEAR: "ガジェット", SHOES: "靴", WEAR: "服", ガジェット: "ガジェット", バッグ: "バッグ", アパレル: "服", デスク環境: "デスクアイテム", EDC: "EDCギア", トラベル: "トラベルグッズ" };
+  return map[cat] || item.subCategory || "アイテム";
 }

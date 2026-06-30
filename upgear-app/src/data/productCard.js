@@ -76,8 +76,15 @@ function extractBrand(label) {
   return label.split(/[\s_\-（]/)[0];
 }
 
+function toLegacyCat(item) {
+  const c = item.mainCategory || item.category || "GEAR";
+  const m = { ガジェット: "GEAR", バッグ: "GEAR", アパレル: "WEAR", デスク環境: "GEAR", EDC: "GEAR", トラベル: "GEAR", その他: "GEAR" };
+  return m[c] || (["GEAR","SHOES","WEAR"].includes(c) ? c : "GEAR");
+}
+
 export function generateProductCard(item) {
-  const cat = item.category || "GEAR";
+  const cat = toLegacyCat(item);
+  const mainCat = item.mainCategory || item.category || cat;
   const score = Number(item.score) || 70;
   const tmpl = REVIEW_TEMPLATES[cat] || REVIEW_TEMPLATES.GEAR;
   const urls = item.urls || {};
@@ -95,13 +102,14 @@ export function generateProductCard(item) {
 
   return {
     name: item.label,
-    category: cat,
-    categoryLabel: CATEGORY_LABELS[cat] || cat,
+    mainCategory: mainCat,
+    category: mainCat,  // 後方互換
+    categoryLabel: mainCat,
     price: item.price ? `¥${Number(item.price).toLocaleString()}` : "—",
     score,
     judgment: item.judgment,
     brand: extractBrand(item.label),
-    description: `${item.label}は${CATEGORY_LABELS[cat]}カテゴリの製品。UpGearスコア${score}点 / ${item.judgment}。`,
+    description: `${item.label}は${mainCat}カテゴリの製品。UpGearスコア${score}点 / ${item.judgment}。`,
     specs: SPECS_DB[cat] || [],
     reviewSummary: {
       avg: reviewAvg.toFixed(1),
