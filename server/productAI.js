@@ -89,6 +89,9 @@ export async function analyzeProduct(scraped, visionResult, existingCategoryInfo
     reviewCount: scraped.reviewSummary.count,
     reviewSamples: scraped.reviewSummary.samples.slice(0, 3),
 
+    // Rakuten API data (price, review, image from real product listing)
+    rakuten: scraped.rakuten || null,
+
     // Vision
     visionAnalysis: visionResult,
 

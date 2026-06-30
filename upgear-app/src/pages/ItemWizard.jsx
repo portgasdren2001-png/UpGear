@@ -185,6 +185,7 @@ function Step1({ urls, setUrls, onNext }) {
 
 const REAL_STAGES = [
   { id: "init",    label: "URL解析・準備" },
+  { id: "rakuten", label: "楽天API（商品名・価格・レビュー）" },
   { id: "fetch",   label: "ページ取得（Playwright）" },
   { id: "parse",   label: "DOM解析" },
   { id: "schema",  label: "スキーマ取得（JSON-LD / schema.org）" },
@@ -304,6 +305,8 @@ function Step2({ urls, item, onComplete, onBack }) {
                 addLog(evt.detail);
               } else if (evt.type === "rawDebug") {
                 setDebugData({ debug: evt.debug, categoryInfo: evt.categoryInfo });
+              } else if (evt.type === "rakutenResult") {
+                addLog(`楽天: ${evt.rakuten?.best?.name?.slice(0, 30) || "取得済み"} / ¥${evt.rakuten?.best?.price?.toLocaleString() || "—"} / レビュー${evt.rakuten?.best?.reviewCount || 0}件`);
               } else if (evt.type === "card") {
                 if (!cancelled) setCard(evt.card);
               } else if (evt.type === "done") {

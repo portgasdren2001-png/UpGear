@@ -11,6 +11,7 @@ import cors from 'cors';
 import { scrapeUrls } from './scraper.js';
 import { analyzeProduct, analyzeVision } from './productAI.js';
 import { calcUnderstandingScore } from './scoring.js';
+import { searchRakuten } from './rakuten.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -61,6 +62,24 @@ app.post('/api/product/understand', async (req, res) => {
     await sleep(200);
     sse.emit('stage', { id: 'init', status: 'done' });
 
+    // ── STAGE: rakuten ──
+    sse.emit('stage', { id: 'rakuten', status: 'running', detail: '楽天APIで商品情報を取得中' });
+    let rakutenData = null;
+    if (process.env.RAKUTEN_APP_ID) {
+      const keyword = item.label || null;
+      const result = await searchRakuten({ keyword, urls });
+      if (result.ok && result.best) {
+        rakutenData = result;
+        sse.emit('progress', { stage: 'rakuten', detail: `楽天: 「${result.best.name.slice(0, 40)}」 ¥${result.best.price?.toLocaleString()} / レビュー${result.best.reviewCount}件` });
+        sse.emit('rakutenResult', { rakuten: result });
+      } else {
+        sse.emit('progress', { stage: 'rakuten', detail: `楽天スキップ: ${result.reason}` });
+      }
+    } else {
+      sse.emit('progress', { stage: 'rakuten', detail: 'RAKUTEN_APP_ID未設定 — スキップ' });
+    }
+    sse.emit('stage', { id: 'rakuten', status: 'done' });
+
     // ── STAGE: fetch + parse ──
     sse.emit('stage', { id: 'fetch', status: 'running', detail: 'Playwrightでページを取得中' });
     sse.emit('stage', { id: 'parse', status: 'running' });
@@ -73,10 +92,31 @@ app.post('/api/product/understand', async (req, res) => {
       sse.emit('stage', { id: 'fetch', status: 'done' });
       sse.emit('stage', { id: 'parse', status: 'done' });
     } catch (scrapeErr) {
-      // Scrape failed — emit error but continue with empty data
       sse.emit('stage', { id: 'fetch', status: 'error', detail: scrapeErr.message });
       sse.emit('stage', { id: 'parse', status: 'error' });
       scraped = buildFallbackScraped(urls);
+    }
+
+    // 楽天データをスクレイプ結果にマージ（Playwrightで取れなかった項目を補完）
+    if (rakutenData?.best) {
+      const rb = rakutenData.best;
+      if (!scraped.reviewSummary.avg && rb.reviewAverage)
+        scraped.reviewSummary.avg = rb.reviewAverage;
+      if (!scraped.reviewSummary.count && rb.reviewCount)
+        scraped.reviewSummary.count = rb.reviewCount;
+      if (rb.imageUrl && !scraped.images.includes(rb.imageUrl))
+        scraped.images.unshift(rb.imageUrl);
+      scraped.rakuten = {
+        name: rb.name,
+        price: rb.price,
+        reviewCount: rb.reviewCount,
+        reviewAverage: rb.reviewAverage,
+        imageUrl: rb.imageUrl,
+        url: rb.rakutenUrl,
+        shopName: rb.shopName,
+        catchCopy: rb.catchCopy,
+        totalResults: rakutenData.totalCount,
+      };
     }
 
     // ── STAGE: schema ──
@@ -124,7 +164,7 @@ app.post('/api/product/understand', async (req, res) => {
     // ── STAGE: score ──
     sse.emit('stage', { id: 'score', status: 'running', detail: 'スコア算出・カルテ生成' });
 
-    const card = buildProductCard(aiResult, scraped, visionResult);
+    const card = buildProductCard(aiResult, scraped, visionResult, rakutenData);
     const { score: understandingScore, missing: missingFields } = calcUnderstandingScore(card);
     card.understandingScore = understandingScore;
     card.missingFields = missingFields;
@@ -192,7 +232,8 @@ function buildFallbackAiResult(scraped, item) {
   };
 }
 
-function buildProductCard(ai, scraped, vision) {
+function buildProductCard(ai, scraped, vision, rakutenData) {
+  const rb = rakutenData?.best || null;
   return {
     name: ai.name,
     brand: ai.brand,
@@ -232,6 +273,13 @@ function buildProductCard(ai, scraped, vision) {
     fetchSources: scraped.sources || [],
     rawBreadcrumbs: scraped.breadcrumbs,
     rawCategory: scraped.rawCategory,
+    // 楽天APIデータ
+    rakuten: scraped.rakuten || null,
+    rakutenPrice: rb?.price || null,
+    rakutenReviewCount: rb?.reviewCount || null,
+    rakutenReviewAverage: rb?.reviewAverage || null,
+    rakutenUrl: rb?.rakutenUrl || null,
+    rakutenImageUrl: rb?.imageUrl || null,
   };
 }
 
