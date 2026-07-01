@@ -78,8 +78,17 @@ start "UpGear App" cmd /k "cd /d "%APP_DIR%" && echo  UpGear App 起動中... &&
 echo  [3/3] ブラウザが開くまで少し待ちます...
 timeout /t 4 > nul
 
-:: ─── ブラウザを開く ───────────────────────────────────────────
-start "" "http://localhost:5173"
+:: ─── ブラウザを開く (Edge 優先) ──────────────────────────────
+set "EDGE_PATH1=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+set "EDGE_PATH2=C:\Program Files\Microsoft\Edge\Application\msedge.exe"
+
+if exist "%EDGE_PATH1%" (
+    start "" "%EDGE_PATH1%" "http://localhost:5173"
+) else if exist "%EDGE_PATH2%" (
+    start "" "%EDGE_PATH2%" "http://localhost:5173"
+) else (
+    start "" "http://localhost:5173"
+)
 
 echo.
 echo  ╔══════════════════════════════════════════════════╗
