@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PageHeader, Tag, Btn } from "../components/ui";
 import ItemWizard from "./ItemWizard";
-import CategoryManager from "./CategoryManager";
+import GenreManager from "./GenreManager";
 
 // ─── ステータス定義 ────────────────────────────────────────────────────────────
 
@@ -22,6 +22,16 @@ function getItemStatus(item) {
   if (s >= 70) return "条件付き";
   if (s < 60)  return "非認定";
   return "要確認";
+}
+
+// 手動ジャンルを返す。未設定なら null
+function getManualGenre(item) {
+  return item.manualGenre || null;
+}
+
+// 推定ジャンルを返す（AI・楽天API由来）
+function getInferredGenre(item) {
+  return item.inferredGenre || item.mainCategory || item.category || null;
 }
 
 function StatusBadge({ status }) {
@@ -48,6 +58,23 @@ function SourceTag({ source }) {
   );
 }
 
+// ─── GenreBadge ───────────────────────────────────────────────────────────────
+
+function GenreBadge({ genre, manual }) {
+  const isUnset = !genre;
+  return (
+    <span style={{
+      fontSize: 9, padding: "2px 7px",
+      background: isUnset ? "rgba(100,100,100,0.08)" : manual ? "rgba(255,107,0,0.1)" : "rgba(111,168,220,0.1)",
+      color: isUnset ? "#555" : manual ? "var(--accent)" : "#6fa8dc",
+      border: `1px solid ${isUnset ? "#444" : manual ? "var(--accent)" : "#6fa8dc"}`,
+      whiteSpace: "nowrap",
+    }}>
+      {genre || "未分類"}
+    </span>
+  );
+}
+
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 
 function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStudio }) {
@@ -55,6 +82,7 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
   const status = getItemStatus(item);
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
   const rb = item.rakuten || item.card?.rakuten;
+  const manualGenre = getManualGenre(item);
 
   return (
     <div
@@ -78,12 +106,7 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
             <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
             <StatusBadge status={status} />
-            {(item.mainCategory || item.category) && (
-              <Tag color="gray">{item.mainCategory || item.category}</Tag>
-            )}
-            {item.subCategory && (
-              <Tag color="blue">{item.subCategory}</Tag>
-            )}
+            <GenreBadge genre={manualGenre} manual={true} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {item.label || "（商品名未設定）"}
@@ -106,9 +129,7 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
         {rb?.reviewCount && (
           <span>★{rb.reviewAverage} ({rb.reviewCount?.toLocaleString()}件)</span>
         )}
-        {rb?.url && (
-          <span style={{ color: "#e07b4c" }}>楽天あり</span>
-        )}
+        {rb?.url && <span style={{ color: "#e07b4c" }}>楽天あり</span>}
         {item.card?.understandingScore != null && (
           <span>理解:{item.card.understandingScore}点</span>
         )}
@@ -130,13 +151,94 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
   );
 }
 
-// ─── DetailPanel (右ペイン・シングルクリックで表示) ──────────────────────────
+// ─── GenreSelector ────────────────────────────────────────────────────────────
+// 詳細パネル内でジャンルを手動選択するUI
 
-function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCategoryChange }) {
+function GenreSelector({ item, genres, onSave }) {
+  const [open, setOpen] = useState(false);
+  const manualGenre = getManualGenre(item);
+  const inferredGenre = getInferredGenre(item);
+
+  const handleSelect = (name) => {
+    onSave(item.id, { manualGenre: name });
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    onSave(item.id, { manualGenre: null });
+    setOpen(false);
+  };
+
+  return (
+    <div>
+      {/* 現在のジャンル表示 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div>
+          <span style={{ fontSize: 10, color: "var(--text-dim)", marginRight: 6 }}>手動ジャンル:</span>
+          <GenreBadge genre={manualGenre} manual={true} />
+        </div>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            background: "none", border: "1px solid var(--accent)",
+            color: "var(--accent)", fontSize: 10, padding: "3px 10px",
+            cursor: "pointer", fontFamily: "var(--font-mono)",
+          }}
+        >
+          {open ? "閉じる" : "ジャンルを変更"}
+        </button>
+      </div>
+
+      {/* 推定ジャンル（参考表示） */}
+      {inferredGenre && (
+        <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: open ? 10 : 0 }}>
+          推定ジャンル（AI/楽天API）:&nbsp;
+          <span style={{ color: "#6fa8dc" }}>{inferredGenre}</span>
+          &nbsp;—&nbsp;参考表示のみ。手動設定で上書きされます。
+        </div>
+      )}
+
+      {/* ジャンル一覧 */}
+      {open && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "10px 0" }}>
+          <button
+            onClick={handleClear}
+            style={{
+              padding: "5px 12px", background: "none",
+              border: `1px solid ${!manualGenre ? "var(--accent)" : "var(--border)"}`,
+              color: !manualGenre ? "var(--accent)" : "var(--text-dim)",
+              fontSize: 11, cursor: "pointer", fontFamily: "var(--font-mono)",
+            }}
+          >
+            未分類
+          </button>
+          {genres.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => handleSelect(g.name)}
+              style={{
+                padding: "5px 12px", background: "none",
+                border: `1px solid ${manualGenre === g.name ? "var(--accent)" : "var(--border)"}`,
+                color: manualGenre === g.name ? "var(--accent)" : "var(--text-dim)",
+                fontSize: 11, cursor: "pointer", fontFamily: "var(--font-mono)",
+              }}
+            >
+              {manualGenre === g.name ? "✓ " : ""}{g.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DetailPanel ─────────────────────────────────────────────────────────────
+
+function DetailPanel({ item, genres, onWizard, onNavToStudio, onDelete, onUpdateItem }) {
   if (!item) return (
     <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
       <div style={{ marginBottom: 8 }}>アイテムを選択してください</div>
-      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>クリックで詳細 / ダブルクリックで商品理解AI</div>
+      <div style={{ fontSize: 10 }}>クリックで詳細 / ダブルクリックで商品理解AI</div>
     </div>
   );
 
@@ -151,20 +253,16 @@ function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCa
   if (card?.whatIsThis) sources.push("Claude AI");
   if (sources.length === 0) sources.push("手動");
 
-  const mainCats = categories?.mainCategories || [];
-  const currentMain = mainCats.find((m) => m.name === (item.mainCategory || item.category));
-  const subCats = currentMain?.subCategories || [];
-
   return (
     <div>
       {/* Actions */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <Btn small onClick={() => onWizard(item)}>{card ? "再分析・編集" : "商品理解AIを実行"}</Btn>
         {onNavToStudio && <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>}
         {onDelete && <Btn small variant="danger" onClick={() => onDelete(item.id)}>削除</Btn>}
       </div>
 
-      {/* Status banner */}
+      {/* Status */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: cfg.bg, border: `1px solid ${cfg.color}`, marginBottom: 16 }}>
         <StatusBadge status={status} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -177,36 +275,15 @@ function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCa
         )}
       </div>
 
-      {/* カテゴリ手動変更 */}
-      <Section title="カテゴリ" color="var(--accent)">
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 9, color: "var(--text-dim)" }}>大カテゴリ</span>
-            <select
-              value={item.mainCategory || item.category || ""}
-              onChange={(e) => onCategoryChange(item.id, { mainCategory: e.target.value, subCategory: "" })}
-              style={{ background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 11, padding: "4px 8px" }}
-            >
-              <option value="">未設定</option>
-              {mainCats.map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 9, color: "var(--text-dim)" }}>小カテゴリ</span>
-            <select
-              value={item.subCategory || ""}
-              onChange={(e) => onCategoryChange(item.id, { subCategory: e.target.value })}
-              disabled={subCats.length === 0}
-              style={{ background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 11, padding: "4px 8px" }}
-            >
-              <option value="">未設定</option>
-              {subCats.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
-          </div>
+      {/* ─ ジャンル手動選択 ─ */}
+      <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px", marginBottom: 16 }}>
+        <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.15em", borderLeft: "2px solid var(--accent)", paddingLeft: 8, marginBottom: 10 }}>
+          ジャンル
         </div>
-      </Section>
+        <GenreSelector item={item} genres={genres} onSave={onUpdateItem} />
+      </div>
 
-      {/* Missing reasons */}
+      {/* 不足情報 */}
       {(item.missingReasons || []).length > 0 && (
         <div style={{ background: "rgba(224,108,117,0.08)", border: "1px solid rgba(224,108,117,0.3)", padding: "10px 14px", marginBottom: 16 }}>
           <div style={{ fontSize: 9, color: "#e06c75", letterSpacing: "0.15em", marginBottom: 6 }}>不足情報</div>
@@ -216,14 +293,14 @@ function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCa
         </div>
       )}
 
-      {/* 楽天APIデータ */}
+      {/* 楽天データ */}
       <Section title="楽天API取得データ" color="#e07b4c">
-        <Row label="商品名"         value={rb?.name} source="楽天API" />
-        <Row label="価格"           value={rb?.price ? `¥${Number(rb.price).toLocaleString()}` : null} source="楽天API" />
-        <Row label="レビュー件数"   value={rb?.reviewCount ? `${rb.reviewCount.toLocaleString()}件` : null} source="楽天API" />
-        <Row label="レビュー平均"   value={rb?.reviewAverage ? `★${rb.reviewAverage}` : null} source="楽天API" />
-        <Row label="楽天商品URL"    value={rb?.url} source="楽天API" link />
-        <Row label="ショップ名"     value={rb?.shopName} source="楽天API" />
+        <Row label="商品名"       value={rb?.name} source="楽天API" />
+        <Row label="価格"         value={rb?.price ? `¥${Number(rb.price).toLocaleString()}` : null} source="楽天API" />
+        <Row label="レビュー件数" value={rb?.reviewCount ? `${rb.reviewCount.toLocaleString()}件` : null} source="楽天API" />
+        <Row label="レビュー平均" value={rb?.reviewAverage ? `★${rb.reviewAverage}` : null} source="楽天API" />
+        <Row label="楽天URL"      value={rb?.url} source="楽天API" link />
+        <Row label="ショップ名"   value={rb?.shopName} source="楽天API" />
         {rb?.imageUrl && (
           <div style={{ padding: "8px 0" }}>
             <span style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>画像</span>
@@ -235,12 +312,9 @@ function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCa
 
       <Section title="Playwright取得データ" color="#6fa8dc">
         <Row label="ブランド"     value={card?.brand} source="Playwright" />
-        <Row label="大カテゴリ"   value={item.mainCategory || card?.mainCategory || card?.category} source="Playwright" />
+        <Row label="推定ジャンル" value={getInferredGenre(item)} source="Playwright" />
         <Row label="小カテゴリ"   value={item.subCategory || card?.subCategory} source="Playwright" />
-        <Row label="判定根拠"     value={card?.categorySource} source="Playwright" />
         <Row label="信頼度"       value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
-        <Row label="レビュー平均" value={card?.reviewData?.avg ? `★${card.reviewData.avg}` : null} source="Playwright" />
-        <Row label="レビュー件数" value={card?.reviewData?.count ? `${card.reviewData.count.toLocaleString()}件` : null} source="Playwright" />
         {!card && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>Playwright未実行</div>}
       </Section>
 
@@ -257,12 +331,12 @@ function DetailPanel({ item, categories, onWizard, onNavToStudio, onDelete, onCa
               </div>
             </div>
           )}
-          <Row label="商品説明"     value={card.whatIsThis} source="Claude AI" />
-          <Row label="課題解決"     value={card.whatItSolves} source="Claude AI" />
-          <Row label="向いている人" value={card.forWho} source="Claude AI" />
+          <Row label="商品説明"       value={card.whatIsThis} source="Claude AI" />
+          <Row label="課題解決"       value={card.whatItSolves} source="Claude AI" />
+          <Row label="向いている人"   value={card.forWho} source="Claude AI" />
           <Row label="向いていない人" value={(card.notForWho || []).join(" / ")} source="Claude AI" />
-          <Row label="強み"         value={(card.strengths || []).join("、")} source="Claude AI" />
-          <Row label="弱み"         value={(card.weaknesses || []).join("、")} source="Claude AI" />
+          <Row label="強み"           value={(card.strengths || []).join("、")} source="Claude AI" />
+          <Row label="弱み"           value={(card.weaknesses || []).join("、")} source="Claude AI" />
         </Section>
       )}
 
@@ -327,24 +401,20 @@ function Row({ label, value, source, link }) {
 export default function Stock({
   data, addItem, updateItem, deleteItem,
   selectedItemId, setSelectedItemId, onNavToStudio,
+  genres, addGenre, renameGenre, deleteGenre, moveGenre, resetGenres,
   categories,
-  addMainCategory, renameMainCategory, deleteMainCategory,
-  addSubCategory, renameSubCategory, deleteSubCategory,
-  resetCategories,
 }) {
   const { items } = data;
   const [selectedId, setSelectedId] = useState(selectedItemId || null);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardItem, setWizardItem] = useState(null);
-  const [filter, setFilter] = useState("all");
-  const [catFilter, setCatFilter] = useState("all");
-  const [subCatFilter, setSubCatFilter] = useState("all");
-  const [showCatManager, setShowCatManager] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [genreFilter, setGenreFilter] = useState("all");
+  const [showGenreManager, setShowGenreManager] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchRef = useRef(null);
 
   const selectedItem = items.find((i) => i.id === selectedId) || null;
-  const mainCats = categories?.mainCategories || [];
 
   const openWizard = (item = null) => {
     setWizardItem(item);
@@ -352,13 +422,21 @@ export default function Stock({
   };
 
   const handleSave = (item) => {
-    if (items.find((i) => i.id === item.id)) {
-      updateItem(item.id, item);
+    // ウィザードで保存時: AI推定ジャンルを inferredGenre へ移動、手動は上書きしない
+    const inferredGenre = item.mainCategory || item.category || null;
+    const saved = {
+      ...item,
+      inferredGenre,
+      // manualGenre は既存のものを引き継ぐ（ウィザードは上書きしない）
+      manualGenre: items.find((i) => i.id === item.id)?.manualGenre || null,
+    };
+    if (items.find((i) => i.id === saved.id)) {
+      updateItem(saved.id, saved);
     } else {
-      addItem(item);
+      addItem(saved);
     }
-    setSelectedId(item.id);
-    setSelectedItemId?.(item.id);
+    setSelectedId(saved.id);
+    setSelectedItemId?.(saved.id);
   };
 
   const handleDelete = (id) => {
@@ -367,13 +445,15 @@ export default function Stock({
     setSelectedId(null);
   };
 
-  const handleCategoryChange = (id, patch) => {
+  const handleUpdateItem = (id, patch) => {
     updateItem(id, patch);
   };
 
   const countByStatus = (s) => items.filter((i) => getItemStatus(i) === s).length;
+  const countByGenre  = (name) => items.filter((i) => (getManualGenre(i) || null) === name).length;
+  const unclassifiedCount = items.filter((i) => !getManualGenre(i)).length;
 
-  const FILTERS = [
+  const STATUS_FILTERS = [
     { id: "all",      label: `すべて (${items.length})` },
     { id: "認定",     label: `認定 (${countByStatus("認定")})` },
     { id: "条件付き", label: `条件付き (${countByStatus("条件付き")})` },
@@ -382,28 +462,25 @@ export default function Stock({
     { id: "非認定",   label: `非認定 (${countByStatus("非認定")})` },
   ];
 
-  const getItemMainCat = (i) => i.mainCategory || i.category || "";
-  const getItemSubCat  = (i) => i.subCategory || "";
-
   const filtered = items.filter((i) => {
-    if (filter !== "all" && getItemStatus(i) !== filter) return false;
-    if (catFilter !== "all" && getItemMainCat(i) !== catFilter) return false;
-    if (subCatFilter !== "all" && getItemSubCat(i) !== subCatFilter) return false;
+    if (statusFilter !== "all" && getItemStatus(i) !== statusFilter) return false;
+    if (genreFilter === "__unclassified") {
+      if (getManualGenre(i)) return false;
+    } else if (genreFilter !== "all") {
+      if (getManualGenre(i) !== genreFilter) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (i.label || "").toLowerCase().includes(q) ||
              (i.brand || "").toLowerCase().includes(q) ||
-             (i.subCategory || "").toLowerCase().includes(q);
+             (i.manualGenre || "").toLowerCase().includes(q);
     }
     return true;
   });
 
-  const currentMainObj = mainCats.find((m) => m.name === catFilter);
-  const subCatsInCurrentFilter = currentMainObj?.subCategories || [];
-
-  // 一覧画面のキーボードショートカット
+  // キーボードショートカット
   useEffect(() => {
-    if (showWizard || showCatManager) return;
+    if (showWizard || showGenreManager) return;
     const handle = (e) => {
       if (!selectedItem) return;
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
@@ -411,7 +488,7 @@ export default function Stock({
       if (e.key === "F2") { e.preventDefault(); openWizard(selectedItem); return; }
       if (e.key === "d" && e.ctrlKey) {
         e.preventDefault();
-        const dup = { ...selectedItem, id: `item_${Date.now()}`, no: "—", label: `${selectedItem.label}（コピー）` };
+        const dup = { ...selectedItem, id: `item_${Date.now()}`, no: "—", label: `${selectedItem.label}（コピー）`, manualGenre: selectedItem.manualGenre };
         addItem(dup);
         return;
       }
@@ -423,10 +500,18 @@ export default function Stock({
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [selectedItem, showWizard, showCatManager]);
+  }, [selectedItem, showWizard, showGenreManager]);
+
+  const filterBtnStyle = (active, color) => ({
+    padding: "4px 10px", background: "none", fontFamily: "var(--font-mono)",
+    border: `1px solid ${active ? (color || "var(--accent)") : "var(--border)"}`,
+    color: active ? (color || "var(--accent)") : "var(--text-dim)",
+    fontSize: 10, cursor: "pointer",
+  });
 
   return (
     <div>
+      {/* ヘッダー */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <PageHeader
           title="ストック"
@@ -445,10 +530,10 @@ export default function Stock({
             }}
           />
           <button
-            onClick={() => setShowCatManager(true)}
+            onClick={() => setShowGenreManager(true)}
             style={{ background: "none", border: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 11, padding: "5px 12px", cursor: "pointer", fontFamily: "var(--font-mono)" }}
           >
-            カテゴリ管理
+            ジャンル管理
           </button>
           <Btn variant="primary" onClick={() => openWizard()}>+ 新規アイテム登録</Btn>
         </div>
@@ -464,63 +549,46 @@ export default function Stock({
         ))}
       </div>
 
-      {/* 大カテゴリフィルター */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-        {[{ id: "all", name: "all", label: `すべて (${items.length})` }, ...mainCats.map(m => ({
-          id: m.id,
-          name: m.name,
-          label: `${m.name} (${items.filter(i => getItemMainCat(i) === m.name).length})`,
-        }))].map((f) => (
-          <button key={f.id} onClick={() => { setCatFilter(f.name); setSubCatFilter("all"); }} style={{
-            padding: "4px 10px", background: "none", fontFamily: "var(--font-mono)",
-            border: `1px solid ${catFilter === f.name ? "var(--accent)" : "var(--border)"}`,
-            color: catFilter === f.name ? "var(--accent)" : "var(--text-dim)",
-            fontSize: 10, cursor: "pointer",
-          }}>{f.label}</button>
-        ))}
-      </div>
-
-      {/* 小カテゴリフィルター */}
-      {subCatsInCurrentFilter.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8, paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
-          <button onClick={() => setSubCatFilter("all")} style={{
-            padding: "3px 8px", background: "none", fontFamily: "var(--font-mono)",
-            border: `1px solid ${subCatFilter === "all" ? "var(--accent)" : "var(--border)"}`,
-            color: subCatFilter === "all" ? "var(--accent)" : "var(--text-dim)",
-            fontSize: 9, cursor: "pointer",
-          }}>すべて</button>
-          {subCatsInCurrentFilter.map((s) => {
-            const cnt = items.filter(i => getItemMainCat(i) === catFilter && getItemSubCat(i) === s.name).length;
-            if (cnt === 0) return null;
+      {/* ─ ジャンルフィルター ─ */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, color: "var(--text-dim)", letterSpacing: "0.12em", marginBottom: 6 }}>GENRE</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {/* すべて */}
+          <button onClick={() => setGenreFilter("all")} style={filterBtnStyle(genreFilter === "all")}>
+            すべて ({items.length})
+          </button>
+          {/* 未分類 */}
+          {unclassifiedCount > 0 && (
+            <button onClick={() => setGenreFilter("__unclassified")} style={filterBtnStyle(genreFilter === "__unclassified", "#555")}>
+              未分類 ({unclassifiedCount})
+            </button>
+          )}
+          {/* 登録ジャンル */}
+          {genres.map((g) => {
+            const cnt = countByGenre(g.name);
             return (
-              <button key={s.id} onClick={() => setSubCatFilter(s.name)} style={{
-                padding: "3px 8px", background: "none", fontFamily: "var(--font-mono)",
-                border: `1px solid ${subCatFilter === s.name ? "#6fa8dc" : "var(--border)"}`,
-                color: subCatFilter === s.name ? "#6fa8dc" : "var(--text-dim)",
-                fontSize: 9, cursor: "pointer",
-              }}>{s.name} ({cnt})</button>
+              <button key={g.id} onClick={() => setGenreFilter(g.name)} style={filterBtnStyle(genreFilter === g.name)}>
+                {g.name} ({cnt})
+              </button>
             );
           })}
         </div>
-      )}
+      </div>
 
-      {/* ステータスフィルター */}
+      {/* ─ ステータスフィルター ─ */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-        {FILTERS.map((f) => {
+        {STATUS_FILTERS.map((f) => {
           const cfg = STATUS_CONFIG[f.id];
           return (
-            <button key={f.id} onClick={() => setFilter(f.id)} style={{
-              padding: "5px 12px", background: "none", fontFamily: "var(--font-mono)",
-              border: `1px solid ${filter === f.id ? (cfg?.color || "var(--accent)") : "var(--border)"}`,
-              color: filter === f.id ? (cfg?.color || "var(--accent)") : "var(--text-dim)",
-              fontSize: 11, cursor: "pointer",
-            }}>{f.label}</button>
+            <button key={f.id} onClick={() => setStatusFilter(f.id)} style={filterBtnStyle(statusFilter === f.id, cfg?.color)}>
+              {f.label}
+            </button>
           );
         })}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 16 }}>
-        {/* List */}
+        {/* リスト */}
         <div>
           {filtered.length === 0 ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
@@ -539,10 +607,7 @@ export default function Stock({
                   key={item.id}
                   item={item}
                   selected={selectedId === item.id}
-                  onClick={() => {
-                    setSelectedId(item.id);
-                    setSelectedItemId?.(item.id);
-                  }}
+                  onClick={() => { setSelectedId(item.id); setSelectedItemId?.(item.id); }}
                   onDoubleClick={() => openWizard(item)}
                   onWizard={openWizard}
                   onNavToStudio={onNavToStudio}
@@ -552,31 +617,29 @@ export default function Stock({
           )}
         </div>
 
-        {/* Detail panel (シングルクリックで表示) */}
+        {/* 詳細パネル */}
         <div style={{ background: "var(--bg3)", border: "1px solid var(--border)", padding: "20px 24px", overflowY: "auto", maxHeight: "calc(100vh - 180px)" }}>
           <DetailPanel
             item={selectedItem}
-            categories={categories}
+            genres={genres}
             onWizard={openWizard}
             onNavToStudio={onNavToStudio}
             onDelete={handleDelete}
-            onCategoryChange={handleCategoryChange}
+            onUpdateItem={handleUpdateItem}
           />
         </div>
       </div>
 
-      {/* カテゴリ管理モーダル */}
-      {showCatManager && (
-        <CategoryManager
-          categories={categories}
-          onClose={() => setShowCatManager(false)}
-          addMainCategory={addMainCategory}
-          renameMainCategory={renameMainCategory}
-          deleteMainCategory={deleteMainCategory}
-          addSubCategory={addSubCategory}
-          renameSubCategory={renameSubCategory}
-          deleteSubCategory={deleteSubCategory}
-          resetCategories={resetCategories}
+      {/* ジャンル管理モーダル */}
+      {showGenreManager && (
+        <GenreManager
+          genres={genres}
+          onClose={() => setShowGenreManager(false)}
+          addGenre={addGenre}
+          renameGenre={renameGenre}
+          deleteGenre={deleteGenre}
+          moveGenre={moveGenre}
+          resetGenres={resetGenres}
         />
       )}
 

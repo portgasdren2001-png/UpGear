@@ -22,6 +22,7 @@ export default function App() {
     addMainCategory, renameMainCategory, deleteMainCategory,
     addSubCategory, renameSubCategory, deleteSubCategory,
     resetCategories,
+    genres, addGenre, renameGenre, deleteGenre, moveGenre, resetGenres,
   } = store;
 
   const navToStudio = (itemId) => { setSelectedItemId(itemId); setPage("script"); };
@@ -37,7 +38,7 @@ export default function App() {
   const render = () => {
     switch (page) {
       case "dashboard": return <Dashboard data={data} setFollowers={setFollowers} />;
-      case "stock":     return <Stock data={data} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStudio={navToStudio} onNavToResearch={navToResearch} categories={categories} addMainCategory={addMainCategory} renameMainCategory={renameMainCategory} deleteMainCategory={deleteMainCategory} addSubCategory={addSubCategory} renameSubCategory={renameSubCategory} deleteSubCategory={deleteSubCategory} resetCategories={resetCategories} />;
+      case "stock":     return <Stock data={data} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStudio={navToStudio} onNavToResearch={navToResearch} categories={categories} genres={genres} addGenre={addGenre} renameGenre={renameGenre} deleteGenre={deleteGenre} moveGenre={moveGenre} resetGenres={resetGenres} />;
       case "research":  return <MarketResearch data={data} learningData={learningData} onApplyToStudio={applyResearchToStudio} onNavToStudio={() => setPage("script")} />;
       case "script":    return <ContentStudio data={data} selectedItemId={selectedItemId} setSelectedItemId={setSelectedItemId} onNavToStock={navToStock} onNavToResearch={navToResearch} researchApply={researchApply} onClearResearch={() => setResearchApply(null)} addLearning={addLearning} learningData={learningData} />;
       case "posts":     return <Posts data={data} addPost={addPost} updatePost={updatePost} deletePost={deletePost} />;

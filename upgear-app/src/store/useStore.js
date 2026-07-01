@@ -5,6 +5,36 @@ const STORAGE_KEY = "upgear_data";
 const LEARNING_KEY = "upgear_learning";
 const MASTER_KEY = "upgear_master";
 const CATEGORIES_KEY = "upgear_categories";
+const GENRES_KEY = "upgear_genres";
+
+const DEFAULT_GENRES = {
+  genres: [
+    { id: "g_gadget", name: "ガジェット", order: 0 },
+    { id: "g_bag",    name: "バッグ",     order: 1 },
+    { id: "g_apparel",name: "アパレル",   order: 2 },
+    { id: "g_shoes",  name: "シューズ",   order: 3 },
+    { id: "g_desk",   name: "デスク環境", order: 4 },
+    { id: "g_edc",    name: "EDC",        order: 5 },
+    { id: "g_travel", name: "トラベル",   order: 6 },
+    { id: "g_other",  name: "その他",     order: 7 },
+  ],
+};
+
+function loadGenres() {
+  try {
+    const raw = localStorage.getItem(GENRES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return DEFAULT_GENRES;
+}
+
+function saveGenres(data) {
+  localStorage.setItem(GENRES_KEY, JSON.stringify(data));
+}
+
+function genGenreId() {
+  return `g_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+}
 
 const DEFAULT_CATEGORIES = {
   mainCategories: [
@@ -119,6 +149,7 @@ export function useStore() {
   const [learningData, setLearningDataState] = useState(() => loadLearning());
   const [masterStore, setMasterStore] = useState(() => loadMaster());
   const [categories, setCategoriesState] = useState(() => loadCategories());
+  const [genreStore, setGenreStore] = useState(() => loadGenres());
 
   const update = useCallback((updater) => {
     setData((prev) => {
@@ -248,6 +279,59 @@ export function useStore() {
     setCategoriesState(DEFAULT_CATEGORIES);
   };
 
+  // ─── Genre management ─────────────────────────────────────────────────────────
+
+  const genres = [...(genreStore.genres || [])].sort((a, b) => a.order - b.order);
+
+  const updateGenres = (updater) => {
+    setGenreStore((prev) => {
+      const next = updater(prev);
+      saveGenres(next);
+      return next;
+    });
+  };
+
+  const addGenre = (name) => {
+    updateGenres((prev) => {
+      const maxOrder = Math.max(-1, ...(prev.genres || []).map((g) => g.order));
+      return { ...prev, genres: [...(prev.genres || []), { id: genGenreId(), name, order: maxOrder + 1 }] };
+    });
+  };
+
+  const renameGenre = (id, name) => {
+    updateGenres((prev) => ({
+      ...prev,
+      genres: prev.genres.map((g) => (g.id === id ? { ...g, name } : g)),
+    }));
+  };
+
+  const deleteGenre = (id) => {
+    updateGenres((prev) => ({
+      ...prev,
+      genres: prev.genres.filter((g) => g.id !== id),
+    }));
+  };
+
+  const moveGenre = (id, direction) => {
+    updateGenres((prev) => {
+      const sorted = [...prev.genres].sort((a, b) => a.order - b.order);
+      const idx = sorted.findIndex((g) => g.id === id);
+      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return prev;
+      const newList = sorted.map((g, i) => {
+        if (i === idx)     return { ...g, order: sorted[swapIdx].order };
+        if (i === swapIdx) return { ...g, order: sorted[idx].order };
+        return g;
+      });
+      return { ...prev, genres: newList };
+    });
+  };
+
+  const resetGenres = () => {
+    saveGenres(DEFAULT_GENRES);
+    setGenreStore(DEFAULT_GENRES);
+  };
+
   return {
     data,
     addPost, updatePost, deletePost,
@@ -267,5 +351,11 @@ export function useStore() {
     renameSubCategory,
     deleteSubCategory,
     resetCategories,
+    genres,
+    addGenre,
+    renameGenre,
+    deleteGenre,
+    moveGenre,
+    resetGenres,
   };
 }
