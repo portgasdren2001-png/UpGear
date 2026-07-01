@@ -64,6 +64,50 @@ async function findChromiumExecutable(chromium) {
     }
   } catch { /* Windows等では失敗することがある */ }
 
+  // 2.5. インストール済みディレクトリをバージョン非依存でスキャン
+  {
+    const { readdirSync } = require('fs');
+    // PLAYWRIGHT_BROWSERS_PATH または既知の既定パスを探す
+    const baseDirs = [
+      process.env.PLAYWRIGHT_BROWSERS_PATH,
+      path.join(process.env.HOME || process.env.USERPROFILE || '', '.cache', 'ms-playwright'),
+      path.join(process.env.LOCALAPPDATA || '', 'ms-playwright'),
+    ].filter(Boolean);
+
+    const chromiumExeNames = [
+      // 新バージョン (linux64)
+      ['chrome-linux64', 'chrome'],
+      // 旧バージョン (linux)
+      ['chrome-linux', 'chrome'],
+      // headless-shell 新
+      ['chrome-headless-shell-linux64', 'chrome-headless-shell'],
+      // headless-shell 旧
+      ['chrome-linux', 'chrome-headless-shell'],
+      // Windows
+      ['chrome-win', 'chrome.exe'],
+    ];
+
+    for (const baseDir of baseDirs) {
+      if (!baseDir || !existsSync(baseDir)) continue;
+      let entries;
+      try { entries = readdirSync(baseDir); } catch { continue; }
+      // chromium* ディレクトリを新しい順に試す
+      const chromiumDirs = entries
+        .filter(e => e.startsWith('chromium'))
+        .sort()
+        .reverse();
+      for (const dir of chromiumDirs) {
+        for (const [subfolder, exeName] of chromiumExeNames) {
+          const candidate = path.join(baseDir, dir, subfolder, exeName);
+          if (existsSync(candidate)) {
+            console.log(`  [Chromium] スキャン検出: ${candidate}`);
+            return candidate;
+          }
+        }
+      }
+    }
+  }
+
   // 3. Windows 候補パスを検索
   if (process.platform === 'win32') {
     for (const cand of WIN_CANDIDATES) {
