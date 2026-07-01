@@ -291,11 +291,10 @@ function buildFallbackScraped(urls) {
 
 function buildFallbackAiResult(scraped, item) {
   const rb = scraped.rakuten || null;
-  const name = scraped.h1 || scraped.title || scraped.og.title || item.label || rb?.name || '不明';
-  const brand = scraped.specs.brand || item.brand || name.split(/[\s\-]/)[0] || '不明';
+  const name = scraped.h1 || scraped.title || scraped.og?.title || item.label || rb?.name || '不明';
+  const brand = scraped.specs?.brand || item.brand || name.split(/[\s\-]/)[0] || '不明';
   const catchCopy = rb?.catchCopy || '';
 
-  // 楽天データからキーワードを抽出
   const rakutenKeywords = [];
   if (rb?.name) {
     const words = rb.name.split(/[\s　【】「」（）()・\/]/).filter(w => w.length >= 2 && w.length <= 12);
@@ -307,83 +306,116 @@ function buildFallbackAiResult(scraped, item) {
     brand,
     maker: brand,
     model: '',
-    category: scraped.rawCategory[0] || item.mainCategory || '',
-    subCategory: scraped.breadcrumbs[scraped.breadcrumbs.length - 1] || item.subCategory || '',
+    category: scraped.rawCategory?.[0] || item.mainCategory || '',
+    subCategory: scraped.breadcrumbs?.[scraped.breadcrumbs.length - 1] || item.subCategory || '',
     productType: item.subCategory || '',
-    useCase: catchCopy.slice(0, 80) || '',
+    priceRange: rb?.price ? `¥${rb.price.toLocaleString()}` : '',
     categorySource: rb ? '楽天API商品名' : (scraped.categoryInfo?.sources?.join(', ') || 'データ不足'),
-    categoryChain: scraped.breadcrumbs.slice(0, 3),
+    categoryChain: scraped.breadcrumbs?.slice(0, 3) || [],
     categoryConfidence: scraped.categoryInfo?.confidence || (rb ? 40 : 0),
-    whatIsThis: catchCopy
-      ? `${name}。${catchCopy.slice(0, 100)}`
-      : `${name}の商品です。`,
-    whatItSolves: catchCopy ? catchCopy.slice(0, 80) : '',
+    // UpGear判断フィールド — フォールバックは空にする（推測で埋めない）
+    judgmentReducer: '',
+    notForWho: [],
     forWho: '',
-    useScenes: [],
-    competitors: [],
-    alternatives: [],
+    dailyFrictionReduced: [],
+    continuityReason: '',
+    vsAlternatives: '',
     strengths: [],
     weaknesses: [],
-    notForWho: [],
-    reviewSummary: {
+    upgearScore: null,
+    verdict: '情報不足',
+    verdictReason: 'データ不足のためUpGear判断を実行できませんでした。商品理解AIを再実行してください。',
+    tiktokAngles: [],
+    useScenes: [],
+    // 旧互換
+    whatIsThis: catchCopy ? `${name}。${catchCopy.slice(0, 100)}` : `${name}の商品です。`,
+    whatItSolves: catchCopy ? catchCopy.slice(0, 80) : '',
+    reviewData: {
       avg: rb?.reviewAverage || scraped.reviewSummary?.avg || null,
       count: rb?.reviewCount || scraped.reviewSummary?.count || null,
       highEval: [], lowEval: [], longTerm: '', positive: [], negative: [],
     },
-    searchKeywords: [...new Set([...rakutenKeywords, ...scraped.breadcrumbs.slice(0, 3)])].slice(0, 10),
+    searchKeywords: [...new Set([...rakutenKeywords, ...(scraped.breadcrumbs?.slice(0, 3) || [])])].slice(0, 10),
     visionUsed: false,
     inferenceMethod: rb ? '楽天APIフォールバック（Playwright未実行）' : 'フォールバック（データ不足）',
+    dataQuality: rb ? 'limited' : 'insufficient',
+    dataQualityNote: rb ? '楽天APIデータのみ。Playwright未実行のため詳細情報が不足しています。' : 'データが取得できませんでした。URLを確認して再試行してください。',
   };
 }
 
 function buildProductCard(ai, scraped, vision, rakutenData) {
   const rb = rakutenData?.best || null;
+
+  // reviewData は ai.reviewData（新形式）または ai.reviewSummary（旧互換）から取得
+  const rdSrc = ai.reviewData || ai.reviewSummary || {};
+
   return {
-    name: ai.name,
-    brand: ai.brand,
-    maker: ai.maker || ai.brand,
-    model: ai.model || '',
-    category: ai.category,
-    subCategory: ai.subCategory,
-    productType: ai.productType || ai.subCategory,
-    useCase: ai.useCase,
-    priceRange: ai.priceRange || '',
-    categorySource: ai.categorySource,
-    categoryChain: ai.categoryChain || [],
+    // ─── 基本情報
+    name:         ai.name,
+    brand:        ai.brand,
+    maker:        ai.maker || ai.brand,
+    model:        ai.model || '',
+    category:     ai.category,
+    subCategory:  ai.subCategory,
+    productType:  ai.productType || ai.subCategory,
+    priceRange:   ai.priceRange || '',
+
+    // ─── カテゴリ判定
+    categorySource:     ai.categorySource,
+    categoryChain:      ai.categoryChain || [],
     categoryConfidence: ai.categoryConfidence || 0,
-    whatIsThis: ai.whatIsThis,
-    whatItSolves: ai.whatItSolves,
-    forWho: ai.forWho,
-    notForWho: ai.notForWho || [],
-    useScenes: ai.useScenes || [],
-    competitors: ai.competitors || [],
-    alternatives: ai.alternatives || [],
-    strengths: ai.strengths || [],
-    weaknesses: ai.weaknesses || [],
+
+    // ─── UpGear思想ベース判断（新フィールド）
+    judgmentReducer:        ai.judgmentReducer || '',
+    notForWho:              ai.notForWho || [],
+    forWho:                 ai.forWho || '',
+    dailyFrictionReduced:   ai.dailyFrictionReduced || [],
+    continuityReason:       ai.continuityReason || '',
+    vsAlternatives:         ai.vsAlternatives || '',
+    strengths:              ai.strengths || [],
+    weaknesses:             ai.weaknesses || [],
+    upgearScore:            ai.upgearScore ?? null,
+    verdict:                ai.verdict || '情報不足',
+    verdictReason:          ai.verdictReason || '',
+    tiktokAngles:           ai.tiktokAngles || [],
+
+    // ─── 旧互換フィールド（フロントエンドが参照している箇所のため維持）
+    whatIsThis:    ai.judgmentReducer || ai.whatIsThis || '',
+    whatItSolves:  ai.dailyFrictionReduced?.[0] || ai.whatItSolves || '',
+    useScenes:     ai.useScenes || [],
+    competitors:   ai.competitors || [],
+    alternatives:  ai.alternatives || [],
+
+    // ─── レビューデータ
     reviewData: {
-      avg: ai.reviewSummary?.avg || scraped.reviewSummary?.avg,
-      count: ai.reviewSummary?.count || scraped.reviewSummary?.count,
-      highEval: ai.reviewSummary?.highEval || [],
-      lowEval: ai.reviewSummary?.lowEval || [],
-      longTerm: ai.reviewSummary?.longTerm || '',
-      positive: ai.reviewSummary?.positive || [],
-      negative: ai.reviewSummary?.negative || [],
+      avg:      rdSrc.avg   || scraped.reviewSummary?.avg   || null,
+      count:    rdSrc.count || scraped.reviewSummary?.count || null,
+      highEval: rdSrc.highEval || [],
+      lowEval:  rdSrc.lowEval  || [],
+      longTerm: rdSrc.longTerm || '',
+      positive: rdSrc.positive || [],
+      negative: rdSrc.negative || [],
     },
-    searchKeywords: ai.searchKeywords || [],
+
+    // ─── メタ情報
+    searchKeywords:  ai.searchKeywords || [],
     inferenceMethod: ai.inferenceMethod || '',
-    visionUsed: ai.visionUsed || false,
-    visionCategory: vision?.category || null,
+    dataQuality:     ai.dataQuality || 'limited',
+    dataQualityNote: ai.dataQualityNote || '',
+    visionUsed:      ai.visionUsed || false,
+    visionCategory:  vision?.category || null,
     visionProductType: vision?.productType || null,
-    fetchSources: scraped.sources || [],
-    rawBreadcrumbs: scraped.breadcrumbs,
-    rawCategory: scraped.rawCategory,
-    // 楽天APIデータ
-    rakuten: scraped.rakuten || null,
-    rakutenPrice: rb?.price || null,
-    rakutenReviewCount: rb?.reviewCount || null,
+    fetchSources:    scraped.sources || [],
+    rawBreadcrumbs:  scraped.breadcrumbs,
+    rawCategory:     scraped.rawCategory,
+
+    // ─── 楽天APIデータ
+    rakuten:              scraped.rakuten || null,
+    rakutenPrice:         rb?.price || null,
+    rakutenReviewCount:   rb?.reviewCount || null,
     rakutenReviewAverage: rb?.reviewAverage || null,
-    rakutenUrl: rb?.rakutenUrl || null,
-    rakutenImageUrl: rb?.imageUrl || null,
+    rakutenUrl:           rb?.rakutenUrl || null,
+    rakutenImageUrl:      rb?.imageUrl || null,
   };
 }
 

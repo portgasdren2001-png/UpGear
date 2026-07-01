@@ -1,8 +1,9 @@
 /**
- * productAI.js — Claude API による商品理解
+ * productAI.js — Claude API による商品理解（UpGear思想ベース）
  *
- * 入力: 構造化スクレイピングデータ
- * 出力: 商品カルテ（カテゴリ・信頼度・根拠つき）
+ * UpGearの前提:
+ *   ギア = 判断を減らすための装備
+ *   良い商品ではなく、日常の迷い・手間・失敗を減らす商品を評価する
  */
 
 import Anthropic from '@anthropic-ai/sdk';
@@ -56,96 +57,122 @@ export async function analyzeVision(imageUrls) {
   }
 }
 
-// ─── Product understanding ────────────────────────────────────────────────────
+// ─── UpGear Product Understanding ────────────────────────────────────────────
 
 export async function analyzeProduct(scraped, visionResult, existingCategoryInfo) {
-  const { categoryInfo } = scraped;
 
-  // Build context for Claude
+  // 楽天データを優先的に渡す（商品名・価格・レビュー・説明が最も信頼できる）
+  const rb = scraped.rakuten || null;
+
   const context = {
-    // Page title & h1
-    title: scraped.title,
-    h1: scraped.h1,
+    // 商品の基本情報（楽天API優先）
+    productName:    rb?.name     || scraped.h1 || scraped.title || null,
+    price:          rb?.price    || null,
+    reviewAverage:  rb?.reviewAverage || scraped.reviewSummary?.avg || null,
+    reviewCount:    rb?.reviewCount   || scraped.reviewSummary?.count || null,
+    catchCopy:      rb?.catchCopy || null,
+    shopName:       rb?.shopName  || null,
 
-    // Schema data
-    jsonLd: scraped.jsonLd.slice(0, 5),
-    schemaOrg: scraped.schemaOrg.slice(0, 5),
+    // Playwrightで取得した詳細情報
+    description:    scraped.description?.slice(0, 1000) || null,
+    features:       scraped.features?.slice(0, 10) || [],
+    breadcrumbs:    scraped.breadcrumbs || [],
+    specs:          scraped.specs || {},
 
-    // Navigation
-    breadcrumbs: scraped.breadcrumbs,
-    rawCategory: scraped.rawCategory,
+    // レビューサンプル（ユーザーの生の声）
+    reviewSamples:  scraped.reviewSummary?.samples?.slice(0, 5) || [],
 
-    // Content
-    description: scraped.description?.slice(0, 800),
-    features: scraped.features.slice(0, 8),
-    specs: scraped.specs,
+    // Vision解析（画像から推定）
+    visionAnalysis: visionResult || null,
 
-    // Meta
-    og: scraped.og,
-    meta: { description: scraped.meta.description },
-
-    // Reviews
-    reviewAvg: scraped.reviewSummary.avg,
-    reviewCount: scraped.reviewSummary.count,
-    reviewSamples: scraped.reviewSummary.samples.slice(0, 3),
-
-    // Rakuten API data (price, review, image from real product listing)
-    rakuten: scraped.rakuten || null,
-
-    // Vision
-    visionAnalysis: visionResult,
-
-    // Pre-resolved category (as hint, NOT final decision)
-    categoryHint: categoryInfo,
+    // カテゴリヒント（最終判断はClaudeに委ねる）
+    categoryHint:   existingCategoryInfo || null,
   };
 
-  const prompt = `あなたは商品理解AIです。
-以下の構造化データのみを使って商品を理解してください。
-URLや過去の商品データを推測に使わないでください。
-カテゴリはデータから判定してください（AI推論は最後の手段）。
+  const systemPrompt = `あなたはUpGearの商品判断AIです。
 
-## 入力データ
+## UpGearの思想
+- ギアとは「判断を減らすための装備」
+- 良い商品を探すのではなく、「日常の迷い・手間・失敗を減らす装備」を見つける
+- 誰にでも勧めない。向いていない人を必ず先に出す
+- デスクワーカー・通勤・日常運用・継続使用を重視する
+- 価格より「判断削減・継続運用・代替不可能性」を重視する
+- 一般的なレビューサイトの評価軸（コスパ・デザイン・スペック）は補助情報に過ぎない
+
+## 判断基準
+- 情報が不足している場合は無理に評価せず「情報不足」「要確認」とする
+- 曖昧な場合は高評価にしない
+- UpGearスコアは厳しく採点する（80点以上 = 多くの人の日常判断を確実に減らせる）`;
+
+  const prompt = `以下の商品データをUpGear思想で評価してください。
+
+## 商品データ
 ${JSON.stringify(context, null, 2)}
 
 ## 出力形式（JSON）
 {
   "name": "正確な商品名",
-  "brand": "ブランド名",
+  "brand": "ブランド名（不明なら空文字）",
   "maker": "メーカー名",
   "model": "型番（不明なら空文字）",
-  "category": "大カテゴリ（データから判定）",
-  "subCategory": "サブカテゴリ",
-  "productType": "商品タイプ（より詳細）",
-  "useCase": "主な用途",
-  "priceRange": "価格帯（データにあれば）",
+  "category": "大カテゴリ（ガジェット / バッグ / アパレル / シューズ / デスク環境 / EDC / トラベル / その他）",
+  "subCategory": "小カテゴリ",
+  "productType": "商品タイプ（具体的に）",
+  "priceRange": "価格帯（例: ¥3,000〜5,000）",
 
-  "categorySource": "カテゴリ判定の根拠（例: JSON-LDとパンくずより）",
+  "categorySource": "カテゴリ判定の根拠",
   "categoryChain": ["大カテゴリ", "中カテゴリ", "小カテゴリ"],
-  "categoryConfidence": 信頼度(0-100の数値),
+  "categoryConfidence": カテゴリ信頼度(0-100の数値),
 
-  "whatIsThis": "この商品は何か（1〜2文）",
-  "whatItSolves": "何の課題を解決するか",
-  "forWho": "どんな人向けか",
-  "useScenes": ["使用シーン1", "使用シーン2", "使用シーン3"],
-  "competitors": ["競合商品1", "競合商品2"],
-  "alternatives": ["代替商品1", "代替商品2"],
+  "judgmentReducer": "この商品は何の判断を減らす装備か（1〜2文で具体的に）",
+
+  "notForWho": [
+    "向いていない人の具体的な属性や状況（必ず先に、最低2つ）"
+  ],
+
+  "forWho": "向いている人（デスクワーカー・通勤・日常運用など具体的に）",
+
+  "dailyFrictionReduced": [
+    "日常で減る具体的な迷い・手間・判断（例: 毎朝何を持っていくか迷う時間が消える）"
+  ],
+
+  "continuityReason": "継続使用できる理由（なぜ飽きずに使い続けられるか）",
+
+  "vsAlternatives": "代替品（安い選択肢・他ブランド）と比べた実質的な優位性",
+
   "strengths": ["強み1", "強み2", "強み3"],
-  "weaknesses": ["弱み1", "弱み2"],
-  "notForWho": ["向いていない人1", "向いていない人2"],
 
-  "reviewSummary": {
+  "weaknesses": ["弱点1（実際の使用上の問題）", "弱点2"],
+
+  "upgearScore": UpGearスコア(0-100の整数。厳しく採点。80以上は日常判断を確実に減らせる商品のみ),
+
+  "verdict": "認定 または 条件付き または 非認定 または 情報不足",
+
+  "verdictReason": "認定/非認定の根拠（UpGear思想に基づいて1〜2文）",
+
+  "tiktokAngles": [
+    "TikTok投稿で使える切り口・フック（視聴者が思わず止まるアングル）"
+  ],
+
+  "useScenes": ["日常的な使用シーン1", "使用シーン2"],
+
+  "reviewData": {
     "avg": レビュー平均点(数値またはnull),
     "count": レビュー件数(数値またはnull),
-    "highEval": ["高評価理由1", "高評価理由2"],
-    "lowEval": ["低評価理由1"],
-    "longTerm": "長期使用評価",
+    "highEval": ["高評価の実際の理由"],
+    "lowEval": ["低評価・クレームの実際の内容"],
+    "longTerm": "長期使用者の評価傾向",
     "positive": ["ポジティブ評価1", "ポジティブ評価2"],
     "negative": ["ネガティブ評価1"]
   },
 
   "searchKeywords": ["キーワード1", "キーワード2", "...(10個)"],
+
   "visionUsed": true/false,
-  "inferenceMethod": "判定方法の説明"
+  "inferenceMethod": "判定方法（楽天APIデータ中心 / Playwright + 楽天API / フォールバックなど）",
+
+  "dataQuality": "excellent / good / limited / insufficient（入力データの質の評価）",
+  "dataQualityNote": "データ不足の場合に何が足りないか"
 }
 
 必ずJSONのみを返してください。説明文は不要です。`;
@@ -153,6 +180,7 @@ ${JSON.stringify(context, null, 2)}
   const msg = await client.messages.create({
     model: MODEL,
     max_tokens: 2048,
+    system: systemPrompt,
     messages: [{ role: 'user', content: prompt }],
   });
 
