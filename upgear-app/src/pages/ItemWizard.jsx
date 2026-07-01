@@ -247,6 +247,8 @@ function Step2({ urls, item, onComplete, onBack }) {
   const [showDebug, setShowDebug] = useState(false);
   const [requiresConfirmation, setRequiresConfirmation] = useState(false);
   const [confidence, setConfidence] = useState(null);
+  const [dataSource, setDataSource] = useState(null);
+  const [playwrightOk, setPlaywrightOk] = useState(null);
   const [serverAvailable, setServerAvailable] = useState(null);
   const abortRef = useRef(null);
 
@@ -314,6 +316,8 @@ function Step2({ urls, item, onComplete, onBack }) {
               } else if (evt.type === "done") {
                 setRequiresConfirmation(evt.requiresConfirmation);
                 setConfidence(evt.confidence);
+                setDataSource(evt.dataSource || null);
+                setPlaywrightOk(evt.playwrightOk !== false);
                 if (!cancelled) setDone(true);
               } else if (evt.type === "error") {
                 setError(evt.message);
@@ -416,6 +420,21 @@ function Step2({ urls, item, onComplete, onBack }) {
         <div style={{ background: "rgba(255,107,0,0.08)", border: "1px solid var(--accent)", padding: "8px 12px", marginBottom: 16, fontSize: 11, color: "var(--accent)" }}>
           ⚠ バックエンドサーバー未起動 — ローカル推論で実行中<br />
           <span style={{ fontSize: 10, color: "var(--text-dim)" }}>本番: cd server && node index.js を実行し、ANTHROPIC_API_KEY を設定してください</span>
+        </div>
+      )}
+
+      {/* Playwright失敗 — 楽天APIフォールバック通知 */}
+      {done && playwrightOk === false && (
+        <div style={{ background: "rgba(255,193,7,0.08)", border: "1px solid rgba(255,193,7,0.4)", padding: "10px 14px", marginBottom: 16, fontSize: 11 }}>
+          <div style={{ color: "#ffc107", fontWeight: 600, marginBottom: 4 }}>⚠ Playwrightが使用できませんでした</div>
+          <div style={{ color: "var(--text-dim)", lineHeight: 1.6 }}>
+            Chromiumが未インストールです。楽天APIデータのみで商品カルテを生成しました。<br />
+            <strong style={{ color: "var(--text)" }}>データソース: {dataSource || "楽天APIのみ"}</strong><br />
+            <span style={{ fontSize: 10 }}>
+              完全な解析には以下を実行してください:<br />
+              <code style={{ background: "var(--bg2)", padding: "1px 6px", userSelect: "all" }}>cd upgear-app &amp;&amp; npx playwright install chromium</code>
+            </span>
+          </div>
         </div>
       )}
 

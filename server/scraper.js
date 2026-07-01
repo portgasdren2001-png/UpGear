@@ -8,10 +8,107 @@
  */
 
 import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+import { existsSync } from 'fs';
+import { execSync, spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
-const CHROMIUM_PATH = process.env.CHROMIUM_PATH ||
-  '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ─── Chromium path resolution ─────────────────────────────────────────────────
+
+// 環境変数で上書き可能
+const ENV_PATH = process.env.CHROMIUM_PATH || null;
+
+// Windowsでよく使われるパス候補
+const WIN_CANDIDATES = [
+  // playwright install chromium がインストールするパス (ms-playwright)
+  `${process.env.USERPROFILE || 'C:/Users/user'}/AppData/Local/ms-playwright/chromium-*/chrome-win/chrome.exe`,
+  // システムインストール
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  `${process.env.LOCALAPPDATA || 'C:/Users/user/AppData/Local'}/Google/Chrome/Application/chrome.exe`,
+];
+
+function resolveGlob(pattern) {
+  try {
+    const dir = pattern.split('*')[0];
+    if (!existsSync(dir.replace(/\\/g, '/'))) return null;
+    // Node組み込みglobは使えないためreaddirで解決
+    const { readdirSync } = require('fs');
+    const prefix = path.basename(dir);
+    const parent = path.dirname(dir);
+    const entries = readdirSync(parent);
+    for (const entry of entries.sort().reverse()) {
+      const full = path.join(parent, entry, ...pattern.split('*').slice(1).join('').split('/').filter(Boolean));
+      if (existsSync(full)) return full;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+async function findChromiumExecutable(chromium) {
+  // 1. 環境変数
+  if (ENV_PATH && existsSync(ENV_PATH)) {
+    console.log(`  [Chromium] 環境変数から: ${ENV_PATH}`);
+    return ENV_PATH;
+  }
+
+  // 2. playwright-core の executablePath() (Linux/Mac/CI)
+  try {
+    const p = chromium.executablePath?.();
+    if (p && existsSync(p)) {
+      console.log(`  [Chromium] playwright-core: ${p}`);
+      return p;
+    }
+  } catch { /* Windows等では失敗することがある */ }
+
+  // 3. Windows 候補パスを検索
+  if (process.platform === 'win32') {
+    for (const cand of WIN_CANDIDATES) {
+      const resolved = cand.includes('*') ? resolveGlob(cand) : cand;
+      if (resolved && existsSync(resolved)) {
+        console.log(`  [Chromium] Windowsシステム: ${resolved}`);
+        return resolved;
+      }
+    }
+  }
+
+  // 4. 自動インストール
+  console.log('  [Chromium] 実行ファイルが見つかりません。自動インストールを試みます...');
+  try {
+    const result = spawnSync('npx', ['playwright', 'install', 'chromium'], {
+      cwd: path.join(__dirname, '..', 'upgear-app'),
+      stdio: 'inherit',
+      shell: true,
+      timeout: 120_000,
+    });
+    if (result.status === 0) {
+      // 再度 executablePath() を試みる
+      const p2 = chromium.executablePath?.();
+      if (p2 && existsSync(p2)) {
+        console.log(`  [Chromium] 自動インストール成功: ${p2}`);
+        return p2;
+      }
+      // Windowsグロブ再試行
+      if (process.platform === 'win32') {
+        for (const cand of WIN_CANDIDATES) {
+          const resolved = cand.includes('*') ? resolveGlob(cand) : cand;
+          if (resolved && existsSync(resolved)) return resolved;
+        }
+      }
+    }
+  } catch (installErr) {
+    console.warn('  [Chromium] 自動インストール失敗:', installErr.message);
+  }
+
+  throw new Error(
+    'Chromiumが見つかりません。以下を手動実行してください:\n' +
+    '  cd upgear-app && npx playwright install chromium\n' +
+    'または CHROMIUM_PATH 環境変数でパスを指定してください。'
+  );
+}
 
 // ─── Browser lifecycle ────────────────────────────────────────────────────────
 
@@ -21,6 +118,9 @@ async function getBrowser() {
   if (browserInstance) return browserInstance;
   const pwModule = await import('../upgear-app/node_modules/playwright-core/index.js');
   const { chromium } = pwModule.default ?? pwModule;
+
+  const executablePath = await findChromiumExecutable(chromium);
+
   const launchArgs = [
     '--no-sandbox',
     '--disable-setuid-sandbox',
@@ -31,7 +131,7 @@ async function getBrowser() {
     launchArgs.push(`--proxy-server=${process.env.HTTPS_PROXY}`);
   }
   browserInstance = await chromium.launch({
-    executablePath: CHROMIUM_PATH,
+    executablePath,
     headless: true,
     args: launchArgs,
   });

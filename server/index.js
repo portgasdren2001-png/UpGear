@@ -113,6 +113,7 @@ app.post('/api/product/understand', async (req, res) => {
     sse.emit('stage', { id: 'parse', status: 'running' });
 
     let scraped;
+    let playwrightOk = true;
     try {
       scraped = await scrapeUrls(urls, ({ stage, detail }) => {
         sse.emit('progress', { stage, detail });
@@ -120,8 +121,15 @@ app.post('/api/product/understand', async (req, res) => {
       sse.emit('stage', { id: 'fetch', status: 'done' });
       sse.emit('stage', { id: 'parse', status: 'done' });
     } catch (scrapeErr) {
-      sse.emit('stage', { id: 'fetch', status: 'error', detail: scrapeErr.message });
+      playwrightOk = false;
+      const errMsg = scrapeErr.message || '';
+      const hint = errMsg.includes('executable') || errMsg.includes('Chromium')
+        ? 'Chromium未インストール — 楽天APIデータで継続します'
+        : `Playwright失敗 — 楽天APIデータで継続します`;
+      sse.emit('stage', { id: 'fetch', status: 'error', detail: hint });
       sse.emit('stage', { id: 'parse', status: 'error' });
+      sse.emit('progress', { stage: 'fetch', detail: `⚠ ${hint}` });
+      console.warn('  [Playwright] 失敗:', errMsg.slice(0, 120));
       scraped = buildFallbackScraped(urls);
     }
 
@@ -168,6 +176,19 @@ app.post('/api/product/understand', async (req, res) => {
         catchCopy: rb.catchCopy,
         totalResults: rakutenData.totalCount,
       };
+    }
+
+    // ── Playwright失敗時: 楽天データで scraped を補完 ──
+    if (!playwrightOk && rakutenData?.best) {
+      const rb = rakutenData.best;
+      console.log('  [フォールバック] 楽天データでscrapedを補完');
+      scraped.h1 = scraped.h1 || rb.name || '';
+      scraped.title = scraped.title || rb.name || '';
+      // catchCopyを説明文として活用
+      if (rb.catchCopy) scraped.description = rb.catchCopy;
+      scraped.reviewSummary.avg = rb.reviewAverage || null;
+      scraped.reviewSummary.count = rb.reviewCount || null;
+      if (rb.imageUrl) scraped.images = [rb.imageUrl];
     }
 
     // ── STAGE: schema ──
@@ -237,9 +258,13 @@ app.post('/api/product/understand', async (req, res) => {
     sse.emit('done', {
       requiresConfirmation: confidence < 95,
       confidence,
+      playwrightOk,
       message: confidence >= 95
         ? `カテゴリ自動確定（信頼度 ${confidence}%）`
         : `カテゴリ要確認（信頼度 ${confidence}%）`,
+      dataSource: !playwrightOk
+        ? (rakutenData?.best ? '楽天APIのみ' : 'データ不足')
+        : (rakutenData?.best ? '楽天API + Playwright' : 'Playwrightのみ'),
     });
   } catch (err) {
     console.error('Understand error:', err);
@@ -265,21 +290,49 @@ function buildFallbackScraped(urls) {
 }
 
 function buildFallbackAiResult(scraped, item) {
-  const name = scraped.h1 || scraped.title || scraped.og.title || item.label || '不明';
-  const brand = scraped.specs.brand || name.split(/[\s\-]/)[0] || '不明';
+  const rb = scraped.rakuten || null;
+  const name = scraped.h1 || scraped.title || scraped.og.title || item.label || rb?.name || '不明';
+  const brand = scraped.specs.brand || item.brand || name.split(/[\s\-]/)[0] || '不明';
+  const catchCopy = rb?.catchCopy || '';
+
+  // 楽天データからキーワードを抽出
+  const rakutenKeywords = [];
+  if (rb?.name) {
+    const words = rb.name.split(/[\s　【】「」（）()・\/]/).filter(w => w.length >= 2 && w.length <= 12);
+    rakutenKeywords.push(...words.slice(0, 6));
+  }
+
   return {
-    name, brand, maker: brand, model: '', category: scraped.rawCategory[0] || '',
-    subCategory: scraped.breadcrumbs[scraped.breadcrumbs.length - 1] || '',
-    productType: '', useCase: '',
-    categorySource: scraped.categoryInfo?.sources?.join(', ') || 'データ不足',
+    name,
+    brand,
+    maker: brand,
+    model: '',
+    category: scraped.rawCategory[0] || item.mainCategory || '',
+    subCategory: scraped.breadcrumbs[scraped.breadcrumbs.length - 1] || item.subCategory || '',
+    productType: item.subCategory || '',
+    useCase: catchCopy.slice(0, 80) || '',
+    categorySource: rb ? '楽天API商品名' : (scraped.categoryInfo?.sources?.join(', ') || 'データ不足'),
     categoryChain: scraped.breadcrumbs.slice(0, 3),
-    categoryConfidence: scraped.categoryInfo?.confidence || 0,
-    whatIsThis: `${name}の商品です。`,
-    whatItSolves: '', forWho: '', useScenes: [], competitors: [], alternatives: [],
-    strengths: [], weaknesses: [], notForWho: [],
-    reviewSummary: scraped.reviewSummary,
-    searchKeywords: scraped.breadcrumbs.slice(0, 5),
-    visionUsed: false, inferenceMethod: 'フォールバック（スクレイプ失敗）',
+    categoryConfidence: scraped.categoryInfo?.confidence || (rb ? 40 : 0),
+    whatIsThis: catchCopy
+      ? `${name}。${catchCopy.slice(0, 100)}`
+      : `${name}の商品です。`,
+    whatItSolves: catchCopy ? catchCopy.slice(0, 80) : '',
+    forWho: '',
+    useScenes: [],
+    competitors: [],
+    alternatives: [],
+    strengths: [],
+    weaknesses: [],
+    notForWho: [],
+    reviewSummary: {
+      avg: rb?.reviewAverage || scraped.reviewSummary?.avg || null,
+      count: rb?.reviewCount || scraped.reviewSummary?.count || null,
+      highEval: [], lowEval: [], longTerm: '', positive: [], negative: [],
+    },
+    searchKeywords: [...new Set([...rakutenKeywords, ...scraped.breadcrumbs.slice(0, 3)])].slice(0, 10),
+    visionUsed: false,
+    inferenceMethod: rb ? '楽天APIフォールバック（Playwright未実行）' : 'フォールバック（データ不足）',
   };
 }
 
