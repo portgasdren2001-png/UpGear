@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PageHeader, Tag, Btn } from "../components/ui";
 import ItemWizard from "./ItemWizard";
 import GenreManager from "./GenreManager";
+
+const SERVER = "http://localhost:3001";
 
 // ─── ステータス定義 ────────────────────────────────────────────────────────────
 
@@ -414,6 +416,66 @@ export default function Stock({
   const [searchQuery, setSearchQuery] = useState("");
   const searchRef = useRef(null);
 
+  // ─ ReadyAI同期 ─
+  const [syncState, setSyncState] = useState("idle"); // idle | syncing | done | error
+  const [syncMsg, setSyncMsg] = useState("");
+
+  const handleSyncToReadyAI = useCallback(async () => {
+    setSyncState("syncing");
+    setSyncMsg("同期中...");
+    try {
+      // 公開対象: 情報不足・未分析以外の全商品
+      const publishableItems = items.filter(i => {
+        const s = getItemStatus(i);
+        return s !== "未分析" && s !== "解析中";
+      });
+
+      // ランキング: upgearScore降順 上位20件
+      const rankings = [...publishableItems]
+        .filter(i => (i.card?.upgearScore ?? i.score) > 0)
+        .sort((a, b) => {
+          const sa = a.card?.upgearScore ?? a.score ?? 0;
+          const sb = b.card?.upgearScore ?? b.score ?? 0;
+          return sb - sa;
+        })
+        .slice(0, 20)
+        .map((item, idx) => ({
+          rank: idx + 1,
+          id:   item.id,
+          name: item.card?.name || item.label,
+          upgearScore: item.card?.upgearScore ?? item.score ?? 0,
+          verdict: item.card?.verdict || item.judgment || '',
+          imageUrl: (item.rakuten || item.card?.rakuten)?.imageUrl || null,
+          manualGenre: item.manualGenre || null,
+        }));
+
+      // カテゴリ一覧（mainCategoriesから）
+      const categorySet = [...new Set(publishableItems.map(i => i.mainCategory || i.category).filter(Boolean))];
+      const categoriesPayload = categorySet.map(name => ({ name }));
+
+      const res = await fetch(`${SERVER}/api/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          products: publishableItems,
+          categories: categoriesPayload,
+          rankings,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSyncState("done");
+        setSyncMsg(`✓ ${json.count}件 同期完了 — ${new Date(json.syncedAt).toLocaleTimeString("ja-JP")}`);
+      } else {
+        throw new Error(json.error || "sync failed");
+      }
+    } catch (e) {
+      setSyncState("error");
+      setSyncMsg(`✗ 同期エラー: ${e.message}`);
+    }
+    setTimeout(() => setSyncState("idle"), 4000);
+  }, [items]);
+
   const selectedItem = items.find((i) => i.id === selectedId) || null;
 
   const openWizard = (item = null) => {
@@ -535,6 +597,23 @@ export default function Stock({
           >
             ジャンル管理
           </button>
+          <button
+            onClick={handleSyncToReadyAI}
+            disabled={syncState === "syncing"}
+            style={{
+              background: syncState === "done" ? "rgba(152,195,121,0.1)" : syncState === "error" ? "rgba(224,108,117,0.1)" : "none",
+              border: `1px solid ${syncState === "done" ? "#98c379" : syncState === "error" ? "#e06c75" : "var(--accent)"}`,
+              color: syncState === "done" ? "#98c379" : syncState === "error" ? "#e06c75" : "var(--accent)",
+              fontSize: 11, padding: "5px 12px", cursor: syncState === "syncing" ? "not-allowed" : "pointer",
+              fontFamily: "var(--font-mono)", opacity: syncState === "syncing" ? 0.6 : 1,
+              minWidth: 130,
+            }}
+          >
+            {syncState === "syncing" ? "同期中..." : "↑ ReadyAIへ同期"}
+          </button>
+          {syncMsg && syncState !== "syncing" && (
+            <span style={{ fontSize: 10, color: syncState === "error" ? "#e06c75" : "#98c379" }}>{syncMsg}</span>
+          )}
           <Btn variant="primary" onClick={() => openWizard()}>+ 新規アイテム登録</Btn>
         </div>
       </div>

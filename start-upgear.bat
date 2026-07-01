@@ -12,6 +12,7 @@ echo.
 set "ROOT=%~dp0"
 set "SERVER_DIR=%ROOT%server"
 set "APP_DIR=%ROOT%upgear-app"
+set "READYAI_DIR=%ROOT%readyai-app"
 
 if not exist "%SERVER_DIR%\index.js" (
     echo [ERROR] server\index.js が見つかりません
@@ -52,6 +53,15 @@ if not exist "%APP_DIR%\node_modules" (
     )
 )
 
+if exist "%READYAI_DIR%\package.json" (
+    if not exist "%READYAI_DIR%\node_modules" (
+        echo.
+        echo  readyai-app の依存パッケージをインストール中...
+        cd /d "%READYAI_DIR%"
+        call npm install
+    )
+)
+
 :: ─── .env 確認 ───────────────────────────────────────────────
 if not exist "%ROOT%.env" (
     echo.
@@ -71,11 +81,17 @@ start "UpGear Server" cmd /k "cd /d "%SERVER_DIR%" && echo  UpGear Server 起動
 timeout /t 2 > nul
 
 :: ─── upgear-app 起動 ─────────────────────────────────────────
-echo  [2/3] フロントエンドを起動中...
+echo  [2/4] UpGear OS を起動中...
 start "UpGear App" cmd /k "cd /d "%APP_DIR%" && echo  UpGear App 起動中... && npm run dev || (echo. && echo [ERROR] フロントエンドの起動に失敗しました && pause)"
 
+:: ─── readyai-app 起動 ─────────────────────────────────────────
+if exist "%READYAI_DIR%\package.json" (
+    echo  [3/4] ReadyAI を起動中...
+    start "ReadyAI" cmd /k "cd /d "%READYAI_DIR%" && echo  ReadyAI 起動中... && npm run dev || (echo. && echo [ERROR] ReadyAI の起動に失敗しました && pause)"
+)
+
 :: フロントエンドの起動を待つ
-echo  [3/3] ブラウザが開くまで少し待ちます...
+echo  [4/4] ブラウザが開くまで少し待ちます...
 timeout /t 4 > nul
 
 :: ─── ブラウザを開く (Edge 優先) ──────────────────────────────
@@ -94,8 +110,9 @@ echo.
 echo  ╔══════════════════════════════════════════════════╗
 echo  ║  UpGear が起動しました                           ║
 echo  ║                                                  ║
-echo  ║  フロントエンド : http://localhost:5173          ║
-echo  ║  バックエンド   : http://localhost:3001          ║
+echo  ║  UpGear OS (管理) : http://localhost:5173   ║
+echo  ║  ReadyAI (公開)  : http://localhost:5174   ║
+echo  ║  バックエンド      : http://localhost:3001   ║
 echo  ║                                                  ║
 echo  ║  終了するには各ウィンドウで Ctrl+C を押してください ║
 echo  ╚══════════════════════════════════════════════════╝

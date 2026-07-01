@@ -12,12 +12,26 @@ import { scrapeUrls } from './scraper.js';
 import { analyzeProduct, analyzeVision } from './productAI.js';
 import { calcUnderstandingScore } from './scoring.js';
 import { searchRakuten } from './rakuten.js';
+import { sync, getProducts, getProductById, getCategories, getRankings, getSyncMeta } from './publishStore.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',  // UpGear OS
+  'http://localhost:5174',  // ReadyAI dev
+  'http://localhost:4173',  // ReadyAI preview
+];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // allow server-to-server (no origin) and listed origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed'));
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: '10mb' }));
 
 // ─── SSE helper ──────────────────────────────────────────────────────────────
 
@@ -419,9 +433,143 @@ function buildProductCard(ai, scraped, vision, rakutenData) {
   };
 }
 
+// ─── Public API (ReadyAI / iOS / Android 共通) ────────────────────────────────
+
+// 商品一覧
+app.get('/api/products', (req, res) => {
+  const products = getProducts();
+  const { category, genre, q, limit, offset } = req.query;
+
+  let list = products;
+  if (category) list = list.filter(p => p.category === category || p.mainCategory === category);
+  if (genre)    list = list.filter(p => p.manualGenre === genre);
+  if (q) {
+    const lq = q.toLowerCase();
+    list = list.filter(p =>
+      (p.name || '').toLowerCase().includes(lq) ||
+      (p.brand || '').toLowerCase().includes(lq) ||
+      (p.category || '').toLowerCase().includes(lq)
+    );
+  }
+
+  const total = list.length;
+  const off = parseInt(offset) || 0;
+  const lim = Math.min(parseInt(limit) || 50, 100);
+  const items = list.slice(off, off + lim);
+
+  res.json({ ok: true, total, offset: off, limit: lim, items });
+});
+
+// 商品詳細
+app.get('/api/products/:id', (req, res) => {
+  const product = getProductById(req.params.id);
+  if (!product) return res.status(404).json({ ok: false, error: 'not found' });
+  res.json({ ok: true, product });
+});
+
+// カテゴリ一覧
+app.get('/api/categories', (req, res) => {
+  const categories = getCategories();
+  const products   = getProducts();
+
+  // 商品数を付与
+  const withCount = categories.map(cat => ({
+    ...cat,
+    count: products.filter(p => p.mainCategory === cat.name || p.category === cat.name).length,
+  }));
+
+  res.json({ ok: true, categories: withCount });
+});
+
+// ランキング
+app.get('/api/rankings', (req, res) => {
+  const rankings = getRankings();
+  res.json({ ok: true, rankings });
+});
+
+// 同期メタ情報
+app.get('/api/sync/status', (_, res) => {
+  res.json({ ok: true, ...getSyncMeta() });
+});
+
+// ─── Sync endpoint (UpGear OS → server) ──────────────────────────────────────
+
+app.post('/api/sync', (req, res) => {
+  const { products, categories, rankings } = req.body;
+  if (!Array.isArray(products)) {
+    return res.status(400).json({ ok: false, error: 'products must be an array' });
+  }
+
+  // 公開用に内部管理情報を除去する
+  const publicProducts = products.map(p => sanitizeForPublic(p));
+
+  const result = sync({ products: publicProducts, categories: categories || [], rankings: rankings || [] });
+  res.json(result);
+});
+
+// 内部管理情報を除いた公開用データに変換
+function sanitizeForPublic(item) {
+  const card = item.card || {};
+  const rb   = item.rakuten || card.rakuten || {};
+
+  return {
+    id:          item.id,
+    name:        card.name        || item.label || '',
+    label:       item.label       || '',
+    brand:       card.brand       || item.brand || '',
+    maker:       card.maker       || '',
+    model:       card.model       || '',
+    category:    card.category    || item.mainCategory || item.category || '',
+    mainCategory: item.mainCategory || card.category || '',
+    subCategory: card.subCategory || item.subCategory || '',
+    manualGenre: item.manualGenre || null,
+    inferredGenre: item.inferredGenre || null,
+
+    // 商品説明・特徴
+    description:        card.whatIsThis        || '',
+    judgmentReducer:    card.judgmentReducer   || '',
+    forWho:             card.forWho            || '',
+    notForWho:          card.notForWho         || [],
+    dailyFrictionReduced: card.dailyFrictionReduced || [],
+    continuityReason:   card.continuityReason  || '',
+    vsAlternatives:     card.vsAlternatives    || '',
+    strengths:          card.strengths         || [],
+    weaknesses:         card.weaknesses        || [],
+    useScenes:          card.useScenes         || [],
+
+    // UpGear評価
+    upgearScore:  card.upgearScore  ?? item.score ?? null,
+    verdict:      card.verdict      || item.judgment || '',
+    verdictReason: card.verdictReason || '',
+
+    // 価格・レビュー
+    price:         rb.price         || item.price    || null,
+    priceRange:    card.priceRange  || '',
+    reviewAvg:     rb.reviewAverage || card.reviewData?.avg  || null,
+    reviewCount:   rb.reviewCount   || card.reviewData?.count || null,
+
+    // 画像
+    imageUrl:   rb.imageUrl || card.rakutenImageUrl || null,
+    images:     item.images || [],
+
+    // 購入リンク
+    rakutenUrl: rb.url || card.rakutenUrl || item.urls?.rakuten || null,
+    amazonUrl:  item.urls?.amazon || null,
+    officialUrl: item.urls?.official || null,
+
+    // タグ・キーワード
+    searchKeywords: card.searchKeywords || [],
+    tiktokAngles:   card.tiktokAngles   || [],
+
+    // メタ
+    publishedAt: Date.now(),
+  };
+}
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`UpGear server v6.1 — http://localhost:${PORT}`);
   console.log(`Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✓ set' : '✗ not set (fallback mode)'}`);
+  console.log(`Public API: http://localhost:${PORT}/api/products`);
 });
