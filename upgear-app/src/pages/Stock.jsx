@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { PageHeader, Tag, Btn } from "../components/ui";
 import { MAIN_CATEGORIES, CATEGORY_TREE } from "../data/productUnderstandingAI";
 import ItemWizard from "./ItemWizard";
@@ -50,20 +50,26 @@ function SourceTag({ source }) {
 
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 
-function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
+function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStudio }) {
+  const [hovered, setHovered] = useState(false);
   const status = getItemStatus(item);
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
   const rb = item.rakuten || item.card?.rakuten;
 
   return (
     <div
+      title="ダブルクリックで商品理解を開く"
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: selected ? "var(--accent-dim)" : "var(--bg3)",
-        border: `1px solid ${selected ? "var(--accent)" : "var(--border)"}`,
+        background: selected ? "var(--accent-dim)" : hovered ? "var(--bg2)" : "var(--bg3)",
+        border: `1px solid ${selected ? "var(--accent)" : hovered ? "var(--accent)" : "var(--border)"}`,
         borderLeft: `3px solid ${cfg.color}`,
         padding: "12px 14px", cursor: "pointer",
-        transition: "border-color 0.15s, background 0.15s",
+        transition: "border-color 0.12s, background 0.12s",
+        userSelect: "none",
       }}
     >
       {/* Header */}
@@ -106,6 +112,9 @@ function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
         {item.card?.understandingScore != null && (
           <span>理解:{item.card.understandingScore}点</span>
         )}
+        {hovered && !selected && (
+          <span style={{ color: "var(--accent)", fontSize: 9, marginLeft: "auto" }}>ダブルクリックで開く</span>
+        )}
       </div>
 
       {/* Actions when selected */}
@@ -121,12 +130,217 @@ function ItemCard({ item, selected, onClick, onWizard, onNavToStudio }) {
   );
 }
 
-// ─── DetailPanel ──────────────────────────────────────────────────────────────
+// ─── CardModal (ダブルクリックで開く商品理解モーダル) ─────────────────────────
 
-function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
+function CardModal({ item, items, onClose, onWizard, onNavToStudio, onDelete, onNavigate }) {
+  const card = item.card;
+  const rb = item.rakuten || card?.rakuten;
+  const status = getItemStatus(item);
+  const cfg = STATUS_CONFIG[status];
+  const currentIndex = items.findIndex(i => i.id === item.id);
+
+  // データソースを判定
+  const sources = [];
+  if (rb) sources.push("楽天API");
+  if (card?.fetchedAt) sources.push("Playwright");
+  if (card?.whatIsThis) sources.push("Claude AI");
+  if (sources.length === 0) sources.push("手動");
+
+  // キーボードハンドラ
+  useEffect(() => {
+    const handle = (e) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Enter" && !e.ctrlKey) { onNavToStudio?.(item.id); onClose(); return; }
+      if (e.key === "s" && e.ctrlKey) { e.preventDefault(); onWizard(item); onClose(); return; }
+      if (e.key === "ArrowLeft"  && currentIndex > 0)               { onNavigate(items[currentIndex - 1].id); return; }
+      if (e.key === "ArrowRight" && currentIndex < items.length - 1) { onNavigate(items[currentIndex + 1].id); return; }
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [item, currentIndex, items]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 300,
+        background: "rgba(0,0,0,0.75)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        padding: "40px 20px", overflowY: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--bg)", border: "1px solid var(--border)",
+          width: "100%", maxWidth: 680,
+          padding: "28px 32px", position: "relative",
+        }}
+      >
+        {/* ナビゲーション */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={() => currentIndex > 0 && onNavigate(items[currentIndex - 1].id)}
+              disabled={currentIndex === 0}
+              style={{ background: "none", border: "1px solid var(--border)", color: currentIndex === 0 ? "var(--text-dim)" : "var(--text)", padding: "4px 10px", cursor: currentIndex === 0 ? "default" : "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}
+              title="前の商品 (←)"
+            >← 前</button>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", display: "flex", alignItems: "center", padding: "0 8px" }}>
+              {currentIndex + 1} / {items.length}
+            </span>
+            <button
+              onClick={() => currentIndex < items.length - 1 && onNavigate(items[currentIndex + 1].id)}
+              disabled={currentIndex === items.length - 1}
+              style={{ background: "none", border: "1px solid var(--border)", color: currentIndex === items.length - 1 ? "var(--text-dim)" : "var(--text)", padding: "4px 10px", cursor: currentIndex === items.length - 1 ? "default" : "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}
+              title="次の商品 (→)"
+            >次 →</button>
+          </div>
+
+          {/* キーボードヒント */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {[["Esc","閉じる"],["Enter","スタジオへ"],["Ctrl+S","保存/編集"],["←→","前後の商品"]].map(([k,v]) => (
+              <span key={k} style={{ fontSize: 9, color: "var(--text-dim)" }}>
+                <kbd style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "1px 5px", borderRadius: 2 }}>{k}</kbd> {v}
+              </span>
+            ))}
+          </div>
+
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* 商品ヘッダー */}
+        <div style={{ display: "flex", gap: 14, marginBottom: 20 }}>
+          {rb?.imageUrl && (
+            <img src={rb.imageUrl} alt="" style={{ width: 64, height: 64, objectFit: "contain", border: "1px solid var(--border)", flexShrink: 0 }} />
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+              <StatusBadge status={status} />
+              {(item.mainCategory || item.category) && <Tag color="gray">{item.mainCategory || item.category}</Tag>}
+              {item.subCategory && <Tag color="blue">{item.subCategory}</Tag>}
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {sources.map(s => <SourceTag key={s} source={s} />)}
+              </div>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 4 }}>{item.label}</div>
+            {item.brand && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{item.brand}</div>}
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: cfg.color }}>{item.score}点</div>
+            <div style={{ fontSize: 9, color: "var(--text-dim)" }}>UpGear</div>
+          </div>
+        </div>
+
+        {/* アクション */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <Btn small onClick={() => { onWizard(item); onClose(); }}>{card ? "再分析・編集" : "商品理解AIを実行"}</Btn>
+          {onNavToStudio && (
+            <Btn small variant="primary" onClick={() => { onNavToStudio(item.id); onClose(); }}>▣ 制作スタジオ</Btn>
+          )}
+          {onDelete && (
+            <Btn small variant="danger" onClick={() => { onDelete(item.id); onClose(); }}>削除</Btn>
+          )}
+        </div>
+
+        {/* Status banner */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: cfg.bg, border: `1px solid ${cfg.color}`, marginBottom: 14 }}>
+          <StatusBadge status={status} />
+          {item.analysisAt && (
+            <span style={{ fontSize: 9, color: "var(--text-dim)", marginLeft: "auto" }}>
+              {new Date(item.analysisAt).toLocaleString("ja-JP")}
+            </span>
+          )}
+        </div>
+
+        {/* 不足情報 */}
+        {(item.missingReasons || []).length > 0 && (
+          <div style={{ background: "rgba(224,108,117,0.08)", border: "1px solid rgba(224,108,117,0.3)", padding: "8px 12px", marginBottom: 14 }}>
+            <div style={{ fontSize: 9, color: "#e06c75", letterSpacing: "0.15em", marginBottom: 4 }}>不足情報</div>
+            {item.missingReasons.map((r, i) => (
+              <div key={i} style={{ fontSize: 10, color: "var(--text-dim)", padding: "2px 0" }}>· {r}</div>
+            ))}
+          </div>
+        )}
+
+        {/* 2カラムグリッド */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          {/* 楽天API */}
+          <Section title="楽天APIデータ" color="#e07b4c">
+            <Row label="価格"         value={rb?.price ? `¥${Number(rb.price).toLocaleString()}` : null} />
+            <Row label="レビュー"     value={rb?.reviewCount ? `★${rb.reviewAverage} (${rb.reviewCount?.toLocaleString()}件)` : null} />
+            <Row label="ショップ"     value={rb?.shopName} />
+            <Row label="楽天URL"      value={rb?.url} link />
+            {!rb && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>未取得</div>}
+          </Section>
+
+          {/* Playwright */}
+          <Section title="Playwrightデータ" color="#6fa8dc">
+            <Row label="大カテゴリ"   value={item.mainCategory || card?.mainCategory || card?.category} />
+            <Row label="小カテゴリ"   value={item.subCategory || card?.subCategory} />
+            <Row label="判定根拠"     value={card?.categorySource} />
+            <Row label="信頼度"       value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} />
+            {!card && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>未実行</div>}
+          </Section>
+        </div>
+
+        {/* Claude AI */}
+        {card && (
+          <Section title="Claude AI解析" color="#98c379">
+            {card.understandingScore != null && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)" }}>商品理解スコア</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: "#98c379" }}>{card.understandingScore}点</span>
+                </div>
+                <div style={{ height: 3, background: "var(--border)" }}>
+                  <div style={{ width: `${card.understandingScore}%`, height: "100%", background: "#98c379" }} />
+                </div>
+              </div>
+            )}
+            <Row label="商品説明"       value={card.whatIsThis} />
+            <Row label="課題解決"       value={card.whatItSolves} />
+            <Row label="向いている人"   value={card.forWho} />
+            <Row label="向いていない人" value={(card.notForWho || []).join(" / ")} />
+            <Row label="強み"           value={(card.strengths || []).join("、")} />
+            <Row label="弱み"           value={(card.weaknesses || []).join("、")} />
+          </Section>
+        )}
+
+        {/* 検索キーワード */}
+        {card?.searchKeywords?.length > 0 && (
+          <Section title="検索キーワード" color="#98c379">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {card.searchKeywords.map((kw) => (
+                <span key={kw} style={{ fontSize: 10, background: "var(--bg2)", border: "1px solid var(--border)", padding: "2px 8px" }}>{kw}</span>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {/* 参照URL */}
+        {item.urls && Object.values(item.urls).some(Boolean) && (
+          <Section title="参照URL">
+            {Object.entries(item.urls).filter(([, v]) => v).map(([k, v]) => (
+              <div key={k} style={{ display: "flex", gap: 8, padding: "3px 0", alignItems: "center" }}>
+                <span style={{ fontSize: 9, color: "var(--text-dim)", width: 70, flexShrink: 0 }}>{k}</span>
+                <a href={v} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</a>
+              </div>
+            ))}
+          </Section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── DetailPanel (右ペイン) ───────────────────────────────────────────────────
+
+function DetailPanel({ item, onWizard, onNavToStudio, onDelete, onOpenModal }) {
   if (!item) return (
     <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
-      アイテムを選択してください
+      <div style={{ marginBottom: 8 }}>アイテムを選択してください</div>
+      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>ダブルクリックで商品理解を開く</div>
     </div>
   );
 
@@ -135,7 +349,6 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
   const status = getItemStatus(item);
   const cfg = STATUS_CONFIG[status];
 
-  // データソースを判定
   const sources = [];
   if (rb) sources.push("楽天API");
   if (card?.fetchedAt) sources.push("Playwright");
@@ -146,6 +359,7 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
     <div>
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <Btn small onClick={onOpenModal}>詳細を開く</Btn>
         <Btn small onClick={() => onWizard(item)}>{card ? "再分析・編集" : "商品理解AIを実行"}</Btn>
         {onNavToStudio && <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>}
         {onDelete && <Btn small variant="danger" onClick={() => onDelete(item.id)}>削除</Btn>}
@@ -192,19 +406,17 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
         {!rb && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>楽天API未取得</div>}
       </Section>
 
-      {/* Playwright / AI データ */}
       <Section title="Playwright取得データ" color="#6fa8dc">
-        <Row label="ブランド"       value={card?.brand} source="Playwright" />
-        <Row label="大カテゴリ"     value={item.mainCategory || card?.mainCategory || card?.category} source="Playwright" />
-        <Row label="小カテゴリ"     value={item.subCategory || card?.subCategory} source="Playwright" />
-        <Row label="判定根拠"       value={card?.categorySource} source="Playwright" />
-        <Row label="信頼度"         value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
-        <Row label="レビュー平均"   value={card?.reviewData?.avg ? `★${card.reviewData.avg}` : null} source="Playwright" />
-        <Row label="レビュー件数"   value={card?.reviewData?.count ? `${card.reviewData.count.toLocaleString()}件` : null} source="Playwright" />
+        <Row label="ブランド"     value={card?.brand} source="Playwright" />
+        <Row label="大カテゴリ"   value={item.mainCategory || card?.mainCategory || card?.category} source="Playwright" />
+        <Row label="小カテゴリ"   value={item.subCategory || card?.subCategory} source="Playwright" />
+        <Row label="判定根拠"     value={card?.categorySource} source="Playwright" />
+        <Row label="信頼度"       value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
+        <Row label="レビュー平均" value={card?.reviewData?.avg ? `★${card.reviewData.avg}` : null} source="Playwright" />
+        <Row label="レビュー件数" value={card?.reviewData?.count ? `${card.reviewData.count.toLocaleString()}件` : null} source="Playwright" />
         {!card && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>Playwright未実行</div>}
       </Section>
 
-      {/* Claude AI データ */}
       {card && (
         <Section title="Claude AI解析データ" color="#98c379">
           {card.understandingScore != null && (
@@ -232,14 +444,12 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
         </Section>
       )}
 
-      {/* UpGear評価 */}
       <Section title="UpGear評価">
         <Row label="UpGearスコア" value={`${item.score}点`} />
         <Row label="判定"         value={item.judgment} />
         <Row label="価格（手動）" value={item.price ? `¥${Number(item.price).toLocaleString()}` : null} />
       </Section>
 
-      {/* 検索キーワード */}
       {card?.searchKeywords?.length > 0 && (
         <Section title="検索キーワード" color="#98c379">
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -250,7 +460,6 @@ function DetailPanel({ item, onWizard, onNavToStudio, onDelete }) {
         </Section>
       )}
 
-      {/* 参照URL */}
       {item.urls && Object.values(item.urls).some(Boolean) && (
         <Section title="参照URL">
           {Object.entries(item.urls).filter(([, v]) => v).map(([k, v]) => (
@@ -301,8 +510,12 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
   const [filter, setFilter] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
   const [subCatFilter, setSubCatFilter] = useState("all");
+  const [modalItemId, setModalItemId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchRef = useRef(null);
 
   const selectedItem = items.find((i) => i.id === selectedId) || null;
+  const modalItem = items.find((i) => i.id === modalItemId) || null;
 
   const openWizard = (item = null) => {
     setWizardItem(item);
@@ -343,6 +556,12 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
     if (filter !== "all" && getItemStatus(i) !== filter) return false;
     if (catFilter !== "all" && getItemMainCat(i) !== catFilter) return false;
     if (subCatFilter !== "all" && getItemSubCat(i) !== subCatFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return (i.label || "").toLowerCase().includes(q) ||
+             (i.brand || "").toLowerCase().includes(q) ||
+             (i.subCategory || "").toLowerCase().includes(q);
+    }
     return true;
   });
 
@@ -350,16 +569,67 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
     ? (CATEGORY_TREE[catFilter]?.subCategories || [])
     : [];
 
+  // 一覧画面のキーボードショートカット
+  useEffect(() => {
+    if (showWizard || modalItemId) return;
+    const handle = (e) => {
+      if (!selectedItem) return;
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "Delete") { handleDelete(selectedItem.id); return; }
+      if (e.key === "F2") { e.preventDefault(); openWizard(selectedItem); return; }
+      if (e.key === "d" && e.ctrlKey) {
+        e.preventDefault();
+        const dup = { ...selectedItem, id: `item_${Date.now()}`, no: "—", label: `${selectedItem.label}（コピー）` };
+        addItem(dup);
+        return;
+      }
+      if (e.key === "f" && e.ctrlKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (e.key === "Enter") {
+        setModalItemId(selectedItem.id);
+        return;
+      }
+    };
+    window.addEventListener("keydown", handle);
+    return () => window.removeEventListener("keydown", handle);
+  }, [selectedItem, showWizard, modalItemId]);
+
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <PageHeader
           title="ストック"
           sub={`商品データベース — ${items.length}件 / 認定 ${countByStatus("認定")}件 / 条件付き ${countByStatus("条件付き")}件`}
         />
-        <Btn variant="primary" onClick={() => openWizard()}>
-          + 新規アイテム登録
-        </Btn>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* 検索バー */}
+          <input
+            ref={searchRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="検索... (Ctrl+F)"
+            style={{
+              background: "var(--bg2)", border: "1px solid var(--border)",
+              color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 11,
+              padding: "5px 10px", width: 180,
+            }}
+          />
+          <Btn variant="primary" onClick={() => openWizard()}>+ 新規アイテム登録</Btn>
+        </div>
+      </div>
+
+      {/* ショートカットヒント */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        {[["ダブルクリック","商品理解を開く"],["Delete","削除"],["F2","編集"],["Ctrl+D","複製"],["Ctrl+F","検索"]].map(([k,v]) => (
+          <span key={k} style={{ fontSize: 9, color: "var(--text-dim)" }}>
+            <kbd style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "1px 5px", borderRadius: 2, fontFamily: "var(--font-mono)" }}>{k}</kbd>
+            {" "}{v}
+          </span>
+        ))}
       </div>
 
       {/* Category filter */}
@@ -377,7 +647,7 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
         ))}
       </div>
 
-      {/* Sub-category filter (shows only when a main category is selected) */}
+      {/* Sub-category filter */}
       {subCatsInCurrentFilter.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 8, paddingLeft: 12, borderLeft: "2px solid var(--border)" }}>
           <button onClick={() => setSubCatFilter("all")} style={{
@@ -421,11 +691,13 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
         <div>
           {filtered.length === 0 ? (
             <div style={{ padding: "40px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 12 }}>
-              アイテムがありません
+              {searchQuery ? `"${searchQuery}" に一致するアイテムがありません` : "アイテムがありません"}
               <br />
-              <button onClick={() => openWizard()} style={{ marginTop: 12, background: "none", border: "1px solid var(--accent)", color: "var(--accent)", padding: "6px 14px", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                + 登録する
-              </button>
+              {!searchQuery && (
+                <button onClick={() => openWizard()} style={{ marginTop: 12, background: "none", border: "1px solid var(--accent)", color: "var(--accent)", padding: "6px 14px", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+                  + 登録する
+                </button>
+              )}
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -438,6 +710,7 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
                     setSelectedId(item.id);
                     setSelectedItemId?.(item.id);
                   }}
+                  onDoubleClick={() => setModalItemId(item.id)}
                   onWizard={openWizard}
                   onNavToStudio={onNavToStudio}
                 />
@@ -453,9 +726,27 @@ export default function Stock({ data, addItem, updateItem, deleteItem, selectedI
             onWizard={openWizard}
             onNavToStudio={onNavToStudio}
             onDelete={handleDelete}
+            onOpenModal={() => selectedItem && setModalItemId(selectedItem.id)}
           />
         </div>
       </div>
+
+      {/* CardModal — ダブルクリックで開く商品理解モーダル */}
+      {modalItem && (
+        <CardModal
+          item={modalItem}
+          items={filtered}
+          onClose={() => setModalItemId(null)}
+          onWizard={openWizard}
+          onNavToStudio={onNavToStudio}
+          onDelete={handleDelete}
+          onNavigate={(id) => {
+            setModalItemId(id);
+            setSelectedId(id);
+            setSelectedItemId?.(id);
+          }}
+        />
+      )}
 
       {/* Wizard overlay */}
       {showWizard && (
