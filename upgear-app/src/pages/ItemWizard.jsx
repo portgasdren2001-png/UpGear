@@ -6,8 +6,6 @@ import {
   URL_TYPE_LABELS,
   FETCH_STAGES,
   calcUnderstandingScore,
-  CATEGORY_TREE,
-  MAIN_CATEGORIES,
 } from "../data/productUnderstandingAI";
 import { runMarketResearch } from "../data/marketResearchAI";
 
@@ -28,8 +26,6 @@ const J_OPTIONS = [
   { v: "保留",        label: "保留（50〜64点）" },
   { v: "非認定",      label: "非認定（49点以下）" },
 ];
-
-// カテゴリはCATEGORY_TREEから動的生成
 
 const UNDERSTANDING_COLOR = (s) =>
   s >= 90 ? "#98c379" : s >= 70 ? "var(--accent)" : "#e06c75";
@@ -475,7 +471,7 @@ function Step2({ urls, item, onComplete, onBack }) {
 
 // ─── Step 3: 確認 ────────────────────────────────────────────────────────────
 
-function Step3({ card, item, onConfirm, onEdit }) {
+function Step3({ card, item, categories, onConfirm, onEdit }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     name:         card.name,
@@ -525,16 +521,17 @@ function Step3({ card, item, onConfirm, onEdit }) {
             ))}
             <div>
               <label style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>大カテゴリ</label>
-              <select value={draft.mainCategory} onChange={(e) => set("mainCategory", e.target.value)} style={inputStyle}>
-                {MAIN_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              <select value={draft.mainCategory} onChange={(e) => { set("mainCategory", e.target.value); set("subCategory", ""); }} style={inputStyle}>
+                <option value="">（未選択）</option>
+                {(categories?.mainCategories || []).map((m) => <option key={m.id} value={m.name}>{m.name}</option>)}
               </select>
             </div>
             <div>
               <label style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>小カテゴリ</label>
               <select value={draft.subCategory} onChange={(e) => set("subCategory", e.target.value)} style={inputStyle}>
                 <option value="">（未選択）</option>
-                {(CATEGORY_TREE[draft.mainCategory]?.subCategories || []).map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                {((categories?.mainCategories || []).find(m => m.name === draft.mainCategory)?.subCategories || []).map((s) => (
+                  <option key={s.id} value={s.name}>{s.name}</option>
                 ))}
               </select>
             </div>
@@ -811,7 +808,7 @@ function Step6({ savedItem, research, onGoToStudio, onFinish }) {
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
-export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose }) {
+export default function ItemWizard({ existingItem, categories, onSave, onGoToStudio, onClose }) {
   const hasExistingUrls = existingItem && Object.values(existingItem.urls || {}).some(Boolean);
   const [step, setStep] = useState(hasExistingUrls ? 2 : 1);
   const [urls, setUrls] = useState(existingItem?.urls || { official: "", amazon: "", rakuten: "", kakaku: "", review: "" });
@@ -925,6 +922,7 @@ export default function ItemWizard({ existingItem, onSave, onGoToStudio, onClose
           <Step3
             card={card}
             item={existingItem || { price: "", judgment: "保留", score: 70 }}
+            categories={categories}
             onConfirm={handleStep3Confirm}
             onEdit={() => setStep(1)}
           />
