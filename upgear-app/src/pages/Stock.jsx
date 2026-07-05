@@ -77,7 +77,7 @@ function GenreBadge({ genre, manual }) {
 
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 
-function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStudio }) {
+function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStudio, onNavToUnderstanding }) {
   const [hovered, setHovered] = useState(false);
   const status = getItemStatus(item);
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
@@ -142,6 +142,9 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
       {selected && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
           <Btn small onClick={() => onWizard(item)}>{item.card ? "再分析" : "商品理解AI"}</Btn>
+          {onNavToUnderstanding && (
+            <Btn small onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解</Btn>
+          )}
           {onNavToStudio && (
             <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>
           )}
@@ -234,7 +237,7 @@ function GenreSelector({ item, genres, onSave }) {
 
 // ─── DetailPanel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ item, genres, onWizard, onNavToStudio, onDelete, onUpdateItem }) {
+function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstanding, onDelete, onUpdateItem }) {
   if (!item) return (
     <div style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
       <div style={{ marginBottom: 8 }}>アイテムを選択してください</div>
@@ -258,6 +261,7 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onDelete, onUpdate
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", justifyContent: "flex-end" }}>
         <Btn small onClick={() => onWizard(item)}>{card ? "再分析・編集" : "商品理解AIを実行"}</Btn>
+        {onNavToUnderstanding && <Btn small onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解</Btn>}
         {onNavToStudio && <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>}
         {onDelete && <Btn small variant="danger" onClick={() => onDelete(item.id)}>削除</Btn>}
       </div>
@@ -400,7 +404,7 @@ function Row({ label, value, source, link }) {
 
 export default function Stock({
   data, addItem, updateItem, deleteItem,
-  selectedItemId, setSelectedItemId, onNavToStudio,
+  selectedItemId, setSelectedItemId, onNavToStudio, onNavToUnderstanding,
   genres, addGenre, renameGenre, deleteGenre, moveGenre, resetGenres,
   categories,
 }) {
@@ -692,6 +696,7 @@ export default function Stock({
                   onDoubleClick={() => openWizard(item)}
                   onWizard={openWizard}
                   onNavToStudio={onNavToStudio}
+                  onNavToUnderstanding={onNavToUnderstanding}
                 />
               ))}
             </div>
@@ -705,6 +710,7 @@ export default function Stock({
             genres={genres}
             onWizard={openWizard}
             onNavToStudio={onNavToStudio}
+            onNavToUnderstanding={onNavToUnderstanding}
             onDelete={handleDelete}
             onUpdateItem={handleUpdateItem}
           />
