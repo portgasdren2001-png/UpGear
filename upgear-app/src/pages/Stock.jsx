@@ -79,14 +79,20 @@ function GenreBadge({ genre, manual }) {
 
 function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStudio, onNavToUnderstanding }) {
   const [hovered, setHovered] = useState(false);
-  const status = getItemStatus(item);
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["未分析"];
-  const rb = item.rakuten || item.card?.rakuten;
+  const u = item.understanding || {};
   const manualGenre = getManualGenre(item);
+  // 商品理解データを優先表示
+  const displayName     = u.name       || item.label       || "（商品名未設定）";
+  const displayBrand    = u.brand      || item.brand       || "";
+  const displayCategory = u.category   || item.mainCategory || item.category || "";
+  const displayPrice    = u.price      ? u.price : (item.price ? `¥${Number(item.price).toLocaleString()}` : "");
+  const displayScore    = u.totalScore || item.score       || null;
+  const displayOneLiner = u.oneLiner   || "";
+  const hasUnderstanding = Object.values(u).some(v => v?.trim?.());
 
   return (
     <div
-      title={item.label}
+      title={displayName}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
@@ -94,36 +100,38 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
       style={{
         background: selected ? "var(--accent-dim)" : hovered ? "var(--bg2)" : "var(--bg3)",
         border: `1px solid ${selected ? "var(--accent)" : hovered ? "var(--accent)" : "var(--border)"}`,
-        borderLeft: `3px solid ${cfg.color}`,
+        borderLeft: `3px solid ${hasUnderstanding ? "#98c379" : "var(--border)"}`,
         padding: "12px 14px", cursor: "pointer",
         transition: "border-color 0.12s, background 0.12s",
         userSelect: "none",
       }}
     >
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
-            <GenreBadge genre={manualGenre} manual={true} />
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {item.label || "（商品名未設定）"}
-          </div>
-          {item.brand && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{item.brand}</div>}
+      <div style={{ marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
+          <GenreBadge genre={manualGenre} manual={true} />
+          {hasUnderstanding && (
+            <span style={{ fontSize: 9, color: "#98c379", background: "rgba(152,195,121,0.12)", border: "1px solid rgba(152,195,121,0.3)", padding: "1px 5px" }}>◍ 理解済み</span>
+          )}
         </div>
-
+        <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {displayName}
+        </div>
+        {displayBrand && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{displayBrand}</div>}
       </div>
 
       {/* Data row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: "var(--text-dim)", alignItems: "center" }}>
-        {item.price && (
-          <span style={{ color: "var(--text)" }}>
-            ¥{Number(item.price).toLocaleString()}
-          </span>
-        )}
-        {item.brand && <span>{item.brand}</span>}
+        {displayCategory && <span>{displayCategory}</span>}
+        {displayPrice && <span style={{ color: "var(--text)" }}>{displayPrice}</span>}
+        {displayScore && <span style={{ color: "var(--accent)" }}>{displayScore}点</span>}
       </div>
+      {displayOneLiner && (
+        <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontStyle: "italic" }}>
+          {displayOneLiner}
+        </div>
+      )}
 
       {/* Actions when selected */}
       {selected && (
@@ -278,41 +286,67 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
       </Section>
       */}
 
-      {/* 手動登録データ */}
-      {item.price && (
-        <Section title="基本情報">
-          <Row label="価格" value={`¥${Number(item.price).toLocaleString()}`} />
-          {item.brand && <Row label="ブランド" value={item.brand} />}
-        </Section>
-      )}
-
-      {item.urls && Object.values(item.urls).some(Boolean) && (
-        <Section title="参照URL">
-          {Object.entries(item.urls).filter(([, v]) => v).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", gap: 8, padding: "4px 0", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{k}</span>
-              <a href={v} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</a>
+      {/* 商品理解データ（SSoT 優先表示） */}
+      {(() => {
+        const u = item.understanding || {};
+        const hasU = Object.values(u).some(v => v?.trim?.());
+        if (hasU) {
+          return (
+            <Section title="商品理解データ" color="var(--accent)">
+              {u.name      && <Row label="商品名"   value={u.name} />}
+              {u.brand     && <Row label="ブランド" value={u.brand} />}
+              {u.category  && <Row label="カテゴリ" value={u.category} />}
+              {u.price     && <Row label="価格"     value={u.price} />}
+              {u.overview  && <Row label="商品概要" value={u.overview} />}
+              {u.strengths && <Row label="強み"     value={u.strengths} />}
+              {u.oneLiner  && <Row label="一言まとめ" value={u.oneLiner} />}
+              {u.officialUrl && (
+                <div style={{ display: "flex", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", width: 110, flexShrink: 0 }}>公式URL</span>
+                  <a href={u.officialUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#6fa8dc", wordBreak: "break-all" }}>{u.officialUrl}</a>
+                </div>
+              )}
+              {u.salesUrl && (
+                <div style={{ display: "flex", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", width: 110, flexShrink: 0 }}>販売URL</span>
+                  <a href={u.salesUrl} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#6fa8dc", wordBreak: "break-all" }}>{u.salesUrl}</a>
+                </div>
+              )}
+            </Section>
+          );
+        }
+        // 商品理解未入力の場合は従来データを表示
+        return (
+          <>
+            {(item.price || item.brand) && (
+              <Section title="基本情報">
+                {item.brand && <Row label="ブランド" value={item.brand} />}
+                {item.price && <Row label="価格" value={`¥${Number(item.price).toLocaleString()}`} />}
+              </Section>
+            )}
+            {item.urls && Object.values(item.urls).some(Boolean) && (
+              <Section title="参照URL">
+                {Object.entries(item.urls).filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", gap: 8, padding: "4px 0", alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-dim)", width: 80, flexShrink: 0 }}>{k}</span>
+                    <a href={v} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</a>
+                  </div>
+                ))}
+              </Section>
+            )}
+            <div style={{ padding: "12px 0", textAlign: "center", color: "var(--text-dim)", fontSize: 11 }}>
+              商品理解データが未入力です。
+              <br />
+              <button
+                onClick={() => onNavToUnderstanding?.(item.id)}
+                style={{ marginTop: 8, background: "none", border: "1px solid var(--accent)", color: "var(--accent)", fontSize: 10, padding: "5px 14px", cursor: "pointer", fontFamily: "var(--font-mono)" }}
+              >
+                ◍ 商品理解を入力する
+              </button>
             </div>
-          ))}
-        </Section>
-      )}
-
-      {/* 商品理解データが保存済みの場合サマリー表示 */}
-      {item.understanding && Object.values(item.understanding).some(v => v?.trim?.()) && (
-        <Section title="商品理解データ（保存済み）" color="var(--accent)">
-          {item.understanding.overview && <Row label="概要" value={item.understanding.overview} />}
-          {item.understanding.strengths && <Row label="強み" value={item.understanding.strengths} />}
-          {item.understanding.oneLiner && <Row label="一言まとめ" value={item.understanding.oneLiner} />}
-          <div style={{ marginTop: 8 }}>
-            <button
-              onClick={() => onNavToUnderstanding?.(item.id)}
-              style={{ background: "none", border: "1px solid var(--accent)", color: "var(--accent)", fontSize: 10, padding: "4px 12px", cursor: "pointer", fontFamily: "var(--font-mono)" }}
-            >
-              ◍ 商品理解を開いて編集
-            </button>
-          </div>
-        </Section>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 }

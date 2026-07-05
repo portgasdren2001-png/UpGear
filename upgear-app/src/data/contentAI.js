@@ -72,7 +72,9 @@ export function generateThemes(item) {
 export function generateHooks(item) {
   const nick = getNick(item);
   const cat = getCatWord(item);
-  const price = item.price ? `¥${Number(item.price).toLocaleString()}` : "1万円";
+  const rawPrice = getItemField(item, "price") || item?.price || "";
+  const priceNum = rawPrice ? Number(String(rawPrice).replace(/[^0-9]/g, "")) : 0;
+  const price = priceNum ? `¥${priceNum.toLocaleString()}` : "1万円";
 
   return [
     { type: "逆張り", text: `${nick}をまだ選んでいるか　俺は1年前に決断した` },
@@ -176,13 +178,16 @@ function genS3(item, mode) {
 
 function genS4(item, mode) {
   const cat = getCatWord(item);
-  const good = "使って初めて分かる良さがある";
+  const good = getItemField(item, "oneLiner") || "使って初めて分かる良さがある";
+  const nick = getNick(item);
+  const score = getItemField(item, "totalScore") || item?.score || "";
+  const scoreText = score ? `${score}点` : "認定";
 
   const base = [
-    { text: `${item.label}　${item.score}点。${good}。` },
+    { text: `${nick}　${scoreText}。${good}。` },
     { text: `正直に言う。これは良かった。毎日使うものだから。` },
     { text: `認定理由は一つだけ。気づいたら元に戻れなくなっていた。` },
-    { text: `${item.score}点の理由。毎日使うものに妥協しなかったから。向いている人には刺さる。` },
+    { text: `${scoreText}の理由。毎日使うものに妥協しなかったから。向いている人には刺さる。` },
   ];
 
   return applyModeToOptions(base, mode);
@@ -234,11 +239,14 @@ export function generateCaption(item, hook) {
   const cat = getCatWord(item);
   const nick = getNick(item);
   const hookText = (hook && typeof hook === "object") ? (hook.text || "") : (hook || "");
+  const score = getItemField(item, "totalScore") || item?.score || "";
+  const scoreText = score ? `${score}点` : "高評価";
+  const oneLiner = getItemField(item, "oneLiner") || "使って初めて分かる良さがある";
 
   return [
     `${hookText}\n\n${cat}で迷いたくない人だけ買え\n\nプロフィールのリンクから詳細をチェック`,
     `毎日使うものだから\nだから${nick}を選んだ\n\n向いてない人→使用頻度が低い人\n\n保存して次の投稿も見て`,
-    `正直に言う。${nick}は${item.score}点。\n\n使って初めて分かる良さがある\n\n${cat}で迷いたくない人だけ買え`,
+    `正直に言う。${nick}は${scoreText}。\n\n${oneLiner}\n\n${cat}で迷いたくない人だけ買え`,
   ];
 }
 
@@ -249,7 +257,11 @@ export function generateHashtags(item) {
     WEAR: ["#服", "#メンズコーデ", "#ミニマリスト", "#シンプルコーデ", "#ファッション", "#ミニマルライフ"],
   };
   const base = ["#UpGear", "#装備", "#おすすめ", "#購入品", "#レビュー", "#TikTok"];
-  return [...base, ...(catTags[item.category] || [])].join(" ");
+  const cat = getItemField(item, "category") || item?.category || "";
+  // 商品理解のハッシュタグ候補があれば追記
+  const customTags = getItemField(item, "hashtags")
+    .split(/[\n\s　,，]+/).map(t => t.trim()).filter(t => t.startsWith("#")).slice(0, 5);
+  return [...base, ...(catTags[cat] || []), ...customTags].join(" ");
 }
 
 // ─── Quality Score ────────────────────────────────────────────────────────────
@@ -458,10 +470,13 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
   ], mode);
 
   // S4: 認定理由
+  const nick4 = getNick(item);
+  const score4 = getItemField(item, "totalScore") || item?.score || "";
+  const scoreText4 = score4 ? `${score4}点` : "認定";
   const s4 = applyModeToOptions([
-    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${item.label}　${item.score}点。理由はシンプル。${buzz.theme.text}。これだけでいい。` },
-    { archetype: save.archetype, archetypeColor: save.color, text: `認定${item.score}点の理由。①使いやすさ ②長期コスパ ③${cat}選びの基準をクリア。` },
-    { archetype: follow.archetype, archetypeColor: follow.color, text: `正直に言う。使って初めて分かる良さがある。俺の体験ベースで${item.score}点。` },
+    { archetype: buzz.archetype, archetypeColor: buzz.color, text: `${nick4}　${scoreText4}。理由はシンプル。${buzz.theme.text}。これだけでいい。` },
+    { archetype: save.archetype, archetypeColor: save.color, text: `認定${scoreText4}の理由。①使いやすさ ②長期コスパ ③${cat}選びの基準をクリア。` },
+    { archetype: follow.archetype, archetypeColor: follow.color, text: `正直に言う。使って初めて分かる良さがある。俺の体験ベースで${scoreText4}。` },
   ], mode);
 
   // S5: 向いていない人
@@ -501,8 +516,15 @@ export const REGEN_MODES = [
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
+// ─── SSoT helpers: understanding を優先、fallback は top-level ──────────────────
+
+export function getItemField(item, key, fallback = "") {
+  const u = item?.understanding;
+  return (u?.[key] && String(u[key]).trim()) ? u[key] : (item?.[key] ?? fallback);
+}
+
 function getNick(item) {
-  const label = item.label || "";
+  const label = getItemField(item, "name") || item?.label || "";
   const words = label.split(/[\s　（(]/);
   const first = words[0];
   if (first.length <= 4 && words[1] && !/^[（(]/.test(words[1])) return first + " " + words[1];
@@ -510,7 +532,7 @@ function getNick(item) {
 }
 
 function getCatWord(item) {
-  const cat = item.mainCategory || item.category || "";
+  const cat = getItemField(item, "category") || item?.mainCategory || item?.category || "";
   const map = { GEAR: "ガジェット", SHOES: "靴", WEAR: "服", ガジェット: "ガジェット", バッグ: "バッグ", アパレル: "服", デスク環境: "デスクアイテム", EDC: "EDCギア", トラベル: "トラベルグッズ" };
-  return map[cat] || item.subCategory || "アイテム";
+  return map[cat] || item?.subCategory || "アイテム";
 }

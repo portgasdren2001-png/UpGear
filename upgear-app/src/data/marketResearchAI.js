@@ -1,3 +1,8 @@
+import { getItemField } from "./contentAI.js";
+
+// ─── SSoT helper: resolve from item.understanding first ──────────────────────
+function iField(item, key, fb) { return getItemField(item, key, fb ?? ""); }
+
 // ─── Category & item databases ────────────────────────────────────────────────
 
 const REVIEW_DB = {
@@ -216,31 +221,34 @@ const UPGEAR_SCORE_DIMENSIONS = [
 // ─── Competitor detection ─────────────────────────────────────────────────────
 
 function detectCompetitors(item) {
-  const label = (item.label || "").toLowerCase();
+  const label = (iField(item, "name") || item.label || "").toLowerCase();
+  const cat = iField(item, "category") || item.category || "";
   for (const [keys, set] of Object.entries(COMPETITOR_SETS)) {
     const patterns = keys.split("|");
-    if (patterns.some(p => label.includes(p.toLowerCase()) || item.category === p)) {
+    if (patterns.some(p => label.includes(p.toLowerCase()) || cat === p)) {
       return set;
     }
   }
-  // Fallback by category
   const catFallback = {
     GEAR: COMPETITOR_SETS['リュック|バックパック|バッグ'],
     SHOES: COMPETITOR_SETS['スニーカー|990|NB|ニューバランス'],
     WEAR: COMPETITOR_SETS['ジャケット'],
   };
-  return catFallback[item.category] || COMPETITOR_SETS['リュック|バックパック|バッグ'];
+  return catFallback[cat] || COMPETITOR_SETS['リュック|バックパック|バッグ'];
 }
 
 // ─── UpGear Score calculator ──────────────────────────────────────────────────
 
 function calcUpGearScore(item) {
-  const baseScore = Number(item.score) || 70;
+  const uScore = iField(item, "totalScore");
+  const baseScore = (uScore ? Number(uScore) : null) || Number(item.score) || 70;
+  const rawPrice = iField(item, "price") || item.price || "";
+  const priceNum = rawPrice ? Number(String(rawPrice).replace(/[^0-9]/g, "")) : 0;
 
   const equipScore  = baseScore >= 80 ? 18 : baseScore >= 65 ? 14 : 10;
   const judgScore   = baseScore >= 80 ? 18 : baseScore >= 65 ? 15 : 12;
   const contScore   = baseScore >= 80 ? 17 : 13;
-  const cospaScore  = item.price ? (Number(item.price) < 5000 ? 14 : Number(item.price) < 15000 ? 12 : 9) : 10;
+  const cospaScore  = priceNum ? (priceNum < 5000 ? 14 : priceNum < 15000 ? 12 : 9) : 10;
   const irrepScore  = item.judgment === "認定" ? 13 : item.judgment === "条件付き認定" ? 10 : 7;
   const satisScore  = baseScore >= 80 ? 5 : baseScore >= 65 ? 4 : 3;
   const longScore   = baseScore >= 80 ? 5 : 4;
@@ -891,7 +899,7 @@ export function runMarketResearch(item) {
   return {
     // ① 商品概要
     overview: {
-      name: item.label,
+      name: iField(item, "name") || item.label,
       category: cat,
       price: item.price ? `¥${Number(item.price).toLocaleString()}` : "未設定",
       score: item.score,

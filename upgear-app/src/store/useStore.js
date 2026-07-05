@@ -176,10 +176,25 @@ export function useStore() {
   const addItem = (item) =>
     update((d) => ({ ...d, items: [...d.items, item] }));
 
+  // understanding を保存するとき、top-level フィールドにも自動同期する。
+  // これにより contentAI / Stock などが item.label 等を直接読んでも最新値になる。
   const updateItem = (id, patch) =>
     update((d) => ({
       ...d,
-      items: d.items.map((i) => (i.id === id ? { ...i, ...patch } : i)),
+      items: d.items.map((i) => {
+        if (i.id !== id) return i;
+        const merged = { ...i, ...patch };
+        // understanding が含まれていれば top-level フィールドを同期
+        const u = patch.understanding ?? merged.understanding;
+        if (u) {
+          if (u.name)       merged.label        = u.name;
+          if (u.brand)      merged.brand        = u.brand;
+          if (u.category)   merged.mainCategory = u.category;
+          if (u.price)      merged.price        = u.price.replace(/[^0-9]/g, "") || merged.price;
+          if (u.totalScore) merged.score        = Number(u.totalScore) || merged.score;
+        }
+        return merged;
+      }),
     }));
 
   const deleteItem = (id) =>

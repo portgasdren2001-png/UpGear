@@ -355,23 +355,50 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           )}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 280, overflowY: "auto" }}>
-          {items.map((it) => (
-            <div key={it.id} onClick={() => setSelectedItemId(it.id)} style={{
-              padding: "10px 12px", cursor: "pointer", borderRadius: 4,
-              background: selectedItemId === it.id ? "rgba(255,107,0,0.1)" : "var(--bg2)",
-              border: `1px solid ${selectedItemId === it.id ? "var(--accent)" : "var(--border)"}`,
-            }}>
-              <div style={{ fontSize: 12, color: selectedItemId === it.id ? "var(--text)" : "var(--text-dim)" }}>
-                No.{it.no}　{it.label}
+          {items.map((it) => {
+            const u = it.understanding || {};
+            const hasU = Object.values(u).some(v => v?.trim?.());
+            const displayName = u.name || it.label || "（未設定）";
+            const displayCat  = u.category || it.mainCategory || it.category || "";
+            return (
+              <div key={it.id} onClick={() => setSelectedItemId(it.id)} style={{
+                padding: "10px 12px", cursor: "pointer", borderRadius: 4,
+                background: selectedItemId === it.id ? "rgba(255,107,0,0.1)" : "var(--bg2)",
+                border: `1px solid ${selectedItemId === it.id ? "var(--accent)" : "var(--border)"}`,
+                borderLeft: `3px solid ${hasU ? "#98c379" : "var(--border)"}`,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ fontSize: 12, color: selectedItemId === it.id ? "var(--text)" : "var(--text-dim)", flex: 1 }}>
+                    No.{it.no}　{displayName}
+                  </div>
+                  {hasU && <span style={{ fontSize: 9, color: "#98c379", flexShrink: 0 }}>◍ 理解済み</span>}
+                </div>
+                {displayCat && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{displayCat}</div>}
               </div>
-              <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{it.category} / {it.judgment}</div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
       </Card>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* 商品理解データサマリー（SSoT から自動読み込み） */}
+        {item?.understanding && Object.values(item.understanding).some(v => v?.trim?.()) && (() => {
+          const u = item.understanding;
+          return (
+            <Card>
+              <CardTitle>◍ 商品理解データ（自動読み込み済み）</CardTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 11 }}>
+                {u.name      && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>商品名</span><span>{u.name}</span></div>}
+                {u.category  && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>カテゴリ</span><span>{u.category}</span></div>}
+                {u.oneLiner  && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>一言まとめ</span><span style={{ color: "var(--accent)" }}>{u.oneLiner}</span></div>}
+                {u.overview  && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>概要</span><span style={{ lineHeight: 1.5 }}>{u.overview}</span></div>}
+                {u.strengths && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>強み</span><span style={{ lineHeight: 1.5 }}>{u.strengths}</span></div>}
+                {u.tiktokAngles && <div style={{ display: "flex", gap: 8 }}><span style={{ color: "var(--text-dim)", width: 80, flexShrink: 0 }}>TikTok訴求</span><span style={{ lineHeight: 1.5 }}>{u.tiktokAngles}</span></div>}
+              </div>
+            </Card>
+          );
+        })()}
         <Card>
           <CardTitle>テンプレート</CardTitle>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
