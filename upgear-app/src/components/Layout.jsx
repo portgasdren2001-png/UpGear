@@ -6,7 +6,6 @@ const NAV_ITEMS = [
   { id: "dashboard",     icon: "◈", label: "ダッシュボード" },
   { id: "stock",         icon: "◉", label: "ストック" },
   { id: "understanding", icon: "◍", label: "商品理解" },
-  { id: "research",      icon: "◐", label: "市場調査AI" },
   { id: "script",        icon: "▣", label: "制作スタジオ" },
   { id: "posts",         icon: "◫", label: "投稿データ" },
   { id: "master",        icon: "◎", label: "マスター" },

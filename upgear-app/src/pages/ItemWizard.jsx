@@ -7,7 +7,6 @@ import {
   FETCH_STAGES,
   calcUnderstandingScore,
 } from "../data/productUnderstandingAI";
-import { runMarketResearch } from "../data/marketResearchAI";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1152,136 +1151,51 @@ function Step4({ savedItem, onNext }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-          次のステップ: 商品カルテを使って市場調査を実行します
+          次のステップ: 制作スタジオで台本を作成します
         </div>
-        <Btn variant="primary" onClick={onNext}>市場調査へ →</Btn>
+        <Btn variant="primary" onClick={onNext}>制作スタジオへ →</Btn>
       </div>
     </div>
   );
 }
 
-// ─── Step 5: 市場調査 ─────────────────────────────────────────────────────────
+// ─── Step 5: 制作スタジオ引き継ぎ ───────────────────────────────────────────────
 
 function Step5({ savedItem, onComplete }) {
-  const [running, setRunning] = useState(false);
-  const [research, setResearch] = useState(null);
-
-  const run = () => {
-    setRunning(true);
-    setTimeout(() => {
-      const result = runMarketResearch(savedItem);
-      setResearch(result);
-      setRunning(false);
-    }, 1200);
-  };
-
-  const topArch = research?.bestArchetype?.[0];
-  const archColors = { "バズ型": "#FF6B00", "保存型": "#6fa8dc", "フォロー型": "#98c379" };
+  const u = savedItem?.understanding || {};
+  const hasUnderstanding = Object.values(u).some(v => v?.trim?.());
 
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>市場調査</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>制作スタジオへ引き継ぎ</h2>
         <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>
-          商品カルテのキーワード・カテゴリ・ターゲットを基に市場を調査します。<br />
-          商品名検索は使用しません。
+          商品を保存しました。制作スタジオでTikTok台本を作成できます。
         </p>
       </div>
 
-      {savedItem.card?.understandingScore < 90 && (
-        <div style={{ background: "rgba(224,108,117,0.1)", border: "1px solid #e06c75", padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "#e06c75", fontWeight: 600, marginBottom: 4 }}>
-            商品理解スコア {savedItem.card?.understandingScore}点 — 90点未満
+      {!hasUnderstanding && (
+        <div style={{ background: "rgba(229,192,123,0.1)", border: "1px solid #e5c07b", padding: "12px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#e5c07b", fontWeight: 600, marginBottom: 4 }}>
+            商品理解データ未入力
           </div>
           <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            市場調査精度が低下する可能性があります。それでも実行できます。
+            「商品理解」ページで商品理解データを入力すると、制作スタジオの台本品質が向上します。
           </div>
         </div>
       )}
 
-      {!research && (
-        <div style={{ textAlign: "center", padding: "40px 0" }}>
-          {running ? (
-            <div>
-              <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 12 }}>
-                調査中...
-              </div>
-              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-                カテゴリ: {savedItem.category} ／ キーワード: {(savedItem.card?.searchKeywords || []).slice(0, 3).join("、")}
-              </div>
-            </div>
-          ) : (
-            <Btn variant="primary" onClick={run}>市場調査を実行 →</Btn>
-          )}
+      {hasUnderstanding && (
+        <div style={{ background: "rgba(152,195,121,0.08)", border: "1px solid rgba(152,195,121,0.3)", padding: "12px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#98c379", fontWeight: 600, marginBottom: 4 }}>◍ 商品理解データ読み込み済み</div>
+          {u.name      && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>商品名: {u.name}</div>}
+          {u.oneLiner  && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>一言まとめ: {u.oneLiner}</div>}
+          {u.tiktokAngles && <div style={{ fontSize: 11, color: "var(--text-dim)" }}>TikTok訴求: {u.tiktokAngles?.slice(0, 60)}...</div>}
         </div>
       )}
-
-      {research && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
-            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px", textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 4 }}>UpGearスコア</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "var(--accent)" }}>{research.score?.total}</div>
-            </div>
-            {topArch && (
-              <div style={{ background: "var(--bg2)", border: `1px solid ${archColors[topArch.name] || "var(--border)"}`, padding: "12px 14px", textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 4 }}>推奨アーキタイプ</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: archColors[topArch.name] }}>{topArch.name}</div>
-              </div>
-            )}
-            <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px" }}>
-              <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 4 }}>推奨フック</div>
-              <div style={{ fontSize: 11, lineHeight: 1.5 }}>「{research.hooks?.[0]?.text?.slice(0, 30)}…」</div>
-            </div>
-          </div>
-
-          <div style={{ padding: "14px 16px", background: "var(--bg2)", border: "1px solid var(--accent)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-              市場調査が完了しました。制作スタジオへ引き継ぎます。
-            </div>
-            <Btn variant="primary" onClick={() => onComplete(research)}>制作スタジオへ →</Btn>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Step 6: 制作スタジオ準備完了 ─────────────────────────────────────────────
-
-function Step6({ savedItem, research, onGoToStudio, onFinish }) {
-  const archColors = { "バズ型": "#FF6B00", "保存型": "#6fa8dc", "フォロー型": "#98c379" };
-  const topArch = research?.bestArchetype?.[0];
-
-  return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 32, marginBottom: 8 }}>🎬</div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>制作スタジオへ引き継ぎ完了</h2>
-        <p style={{ fontSize: 12, color: "var(--text-dim)", lineHeight: 1.7 }}>
-          以下の情報が制作スタジオへ引き継がれます。
-        </p>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 24 }}>
-        {[
-          { label: "商品理解", value: `スコア ${savedItem.card?.understandingScore}点`, color: "#98c379" },
-          { label: "市場調査", value: "完了", color: "#98c379" },
-          { label: "推奨アーキタイプ", value: topArch?.name || "—", color: archColors[topArch?.name] || "var(--accent)" },
-          { label: "UpGearスコア", value: `${research?.score?.total}点`, color: "var(--accent)" },
-          { label: "フック候補", value: `${(research?.hooks || []).length}件`, color: "var(--text)" },
-          { label: "投稿企画", value: `${(research?.postPlans || []).length}本`, color: "var(--text)" },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px" }}>
-            <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 4 }}>{label}</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color }}>{value}</div>
-          </div>
-        ))}
-      </div>
 
       <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-        <Btn onClick={onFinish}>ストックに戻る</Btn>
-        <Btn variant="primary" onClick={onGoToStudio}>制作スタジオを開く ▶</Btn>
+        <Btn onClick={onComplete}>制作スタジオへ →</Btn>
       </div>
     </div>
   );
@@ -1295,7 +1209,6 @@ export default function ItemWizard({ existingItem, categories, onSave, onGoToStu
   const [urls, setUrls] = useState(existingItem?.urls || { official: "", amazon: "", rakuten: "", kakaku: "", review: "" });
   const [card, setCard] = useState(existingItem?.card || null);
   const [savedItem, setSavedItem] = useState(existingItem || null);
-  const [research, setResearch] = useState(null);
 
   const handleStep2Complete = (generatedCard) => {
     setCard(generatedCard);
@@ -1360,11 +1273,6 @@ export default function ItemWizard({ existingItem, categories, onSave, onGoToStu
     setStep(4);
   };
 
-  const handleStep5Complete = (researchResult) => {
-    setResearch(researchResult);
-    setStep(6);
-  };
-
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 200,
@@ -1412,14 +1320,9 @@ export default function ItemWizard({ existingItem, categories, onSave, onGoToStu
           <Step4 savedItem={savedItem} onNext={() => setStep(5)} />
         )}
         {step === 5 && savedItem && (
-          <Step5 savedItem={savedItem} onComplete={handleStep5Complete} />
-        )}
-        {step === 6 && savedItem && (
-          <Step6
+          <Step5
             savedItem={savedItem}
-            research={research}
-            onGoToStudio={() => { onGoToStudio(savedItem.id, research); onClose(); }}
-            onFinish={onClose}
+            onComplete={() => { onGoToStudio(savedItem.id); onClose(); }}
           />
         )}
       </div>

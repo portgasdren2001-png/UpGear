@@ -12,7 +12,7 @@ import {
   analyzeSNSPotential,
   REGEN_MODES,
 } from "../data/contentAI";
-import { getTopRecommendations, runMarketResearch } from "../data/marketResearchAI";
+import { getTopRecommendations } from "../data/marketResearchAI";
 
 /* ─── helpers ─── */
 
@@ -90,89 +90,6 @@ function SlideOptionCard({ opt, selected, onClick, label }) {
   );
 }
 
-function ResearchPanel({ recommendations, researchData, onClose }) {
-  const [tab, setTab] = useState("recs");
-  const tabs = [
-    { id: "recs", label: "3択提案" },
-    { id: "market", label: "市場データ" },
-    { id: "competitors", label: "競合" },
-    { id: "targets", label: "ターゲット" },
-  ];
-
-  return (
-    <div style={{
-      position: "fixed", top: 0, right: 0, bottom: 0, width: 380,
-      background: "var(--bg1)", borderLeft: "1px solid var(--border)",
-      zIndex: 200, display: "flex", flexDirection: "column", boxShadow: "-4px 0 20px rgba(0,0,0,0.3)",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        <div style={{ fontSize: 12, color: "var(--accent)", letterSpacing: "0.1em" }}>◐ 市場調査データ</div>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: 16, cursor: "pointer" }}>✕</button>
-      </div>
-      <div style={{ display: "flex", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flex: 1, padding: "8px 4px", background: "none", border: "none",
-            borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
-            color: tab === t.id ? "var(--accent)" : "var(--text-dim)", fontSize: 10, cursor: "pointer",
-          }}>{t.label}</button>
-        ))}
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {tab === "recs" && recommendations.map((rec, i) => (
-          <div key={i} style={{ marginBottom: 16, padding: 12, background: "var(--bg2)", border: `1px solid ${rec.color}`, borderRadius: 4 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-              <span style={{ background: rec.color, color: "#fff", fontSize: 9, fontWeight: 700, padding: "2px 6px" }}>{rec.archetype}</span>
-              <span style={{ fontSize: 10, color: "var(--text-dim)" }}>{rec.archetypeDesc}</span>
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text)", fontWeight: 600, marginBottom: 4 }}>{rec.theme.text}</div>
-            <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 8, lineHeight: 1.5 }}>フック: 「{rec.hook.text}」</div>
-            {rec.snsBasis.map((b, bi) => (
-              <div key={bi} style={{ fontSize: 10, color: "var(--text-dim)", paddingLeft: 8, borderLeft: `2px solid ${rec.color}`, marginBottom: 4, lineHeight: 1.5 }}>{b}</div>
-            ))}
-            <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
-              {[rec.expectedReach, rec.expectedFollow, rec.expectedSave].map((m, mi) => (
-                <span key={mi} style={{ fontSize: 9, color: rec.color, border: `1px solid ${rec.color}`, padding: "1px 5px" }}>{m}</span>
-              ))}
-            </div>
-          </div>
-        ))}
-        {tab === "market" && researchData && (
-          <div>
-            <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>よくある悩み</div>
-            {(researchData.reviewAnalysis?.painPoints || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-            <div style={{ marginTop: 10, fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>SNSバズパターン</div>
-            {(researchData.snsAnalysis?.viralPatterns || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-            <div style={{ marginTop: 10, fontSize: 9, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 8 }}>検索ニーズ</div>
-            {(researchData.searchNeeds?.keywords || []).map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--text-dim)", padding: "3px 0" }}>— {p}</div>)}
-          </div>
-        )}
-        {tab === "competitors" && researchData && (
-          <div>
-            {(researchData.competitorAnalysis?.competitors || []).map((c, i) => (
-              <div key={i} style={{ marginBottom: 10, padding: 10, background: "var(--bg2)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 12, color: "var(--text)", marginBottom: 4 }}>{c.name}</div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>強み: {c.strength}</div>
-                <div style={{ fontSize: 10, color: "#e06c75" }}>弱み: {c.weakness}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {tab === "targets" && researchData && (
-          <div>
-            {(researchData.targetAnalysis?.segments || []).map((seg, i) => (
-              <div key={i} style={{ marginBottom: 10, padding: 10, background: "var(--bg2)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: 11, color: "var(--accent)", marginBottom: 4 }}>{seg.label}</div>
-                <div style={{ fontSize: 10, color: "var(--text-dim)", lineHeight: 1.5 }}>{seg.desc}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ScoreDim({ label, score, max = 20 }) {
   const pct = Math.round((score / max) * 100);
   const color = pct >= 80 ? "var(--accent)" : pct >= 55 ? "#6fa8dc" : "var(--border)";
@@ -202,7 +119,7 @@ function OptionCard({ text, selected, onClick, dim }) {
 
 /* ─── Main Component ─── */
 
-export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock, onNavToResearch, researchApply, onClearResearch, addLearning, learningData }) {
+export default function ContentStudio({ data, selectedItemId: initItemId, setSelectedItemId: syncItemId, onNavToStock, addLearning, learningData }) {
   const { items } = data;
 
   const [step, setStep] = useState(1);
@@ -214,8 +131,6 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const [recommendations, setRecommendations] = useState([]);
   const [selectedRec, setSelectedRec] = useState(null);
   const [selectedHook, setSelectedHook] = useState(null);
-  const [researchPanelOpen, setResearchPanelOpen] = useState(false);
-  const [researchPanelData, setResearchPanelData] = useState(null);
   const [regenMode, setRegenMode] = useState(null);
   const [slides, setSlides] = useState([]);
   const [captions, setCaptions] = useState([]);
@@ -224,7 +139,6 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const [quality, setQuality] = useState(null);
   const [snsAnalysis, setSnsAnalysis] = useState(null);
   const [scriptView, setScriptView] = useState(false);
-  const [researchBanner, setResearchBanner] = useState(!!researchApply);
 
   const [analytics, setAnalytics] = useState({ views: "", likes: "", saves: "", comments: "", follows: "" });
   const [perfResult, setPerfResult] = useState(null);
@@ -232,23 +146,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const item = items.find((i) => i.id === selectedItemId) ?? items[0];
 
   /* ─── Apply research if coming from MarketResearch page ─── */
-  const [appliedResearch, setAppliedResearch] = useState(false);
-  if (researchApply && !appliedResearch) {
-    setAppliedResearch(true);
-    if (researchApply.hook) setTimeout(() => setSelectedHook(researchApply.hook), 0);
-    if (researchApply.plan?.format) setTimeout(() => setSelectedFormat(researchApply.plan.format), 0);
-  }
-
   /* ─── Actions ─── */
-
-  const doResearch = useCallback(() => {
-    const recs = getTopRecommendations(item, learningData ?? []);
-    setRecommendations(recs);
-    setResearchPanelData(runMarketResearch(item));
-    setSelectedRec(null);
-    setSelectedHook(null);
-    setStep(2);
-  }, [item, learningData]);
 
   const doBuild = useCallback((hookOverride) => {
     const hObj = hookOverride ?? selectedHook ?? { text: "" };
@@ -420,7 +318,13 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
             ))}
           </div>
         </Card>
-        <Btn onClick={doResearch} style={{ alignSelf: "flex-end" }}>マーケット調査 → テーマ生成 ▶</Btn>
+        <Btn onClick={() => {
+          const recs = getTopRecommendations(item, learningData ?? []);
+          setRecommendations(recs);
+          setSelectedRec(null);
+          setSelectedHook(null);
+          setStep(2);
+        }} style={{ alignSelf: "flex-end" }}>テーマ生成 ▶</Btn>
       </div>
     </div>
   );
@@ -816,48 +720,13 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   /* ─── Render ─── */
 
   return (
-    <div style={{ paddingRight: researchPanelOpen ? 394 : 0, transition: "padding-right 0.2s" }}>
-      {researchPanelOpen && (
-        <ResearchPanel
-          recommendations={recommendations}
-          researchData={researchPanelData}
-          onClose={() => setResearchPanelOpen(false)}
-        />
-      )}
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
         <PageHeader
           title="コンテンツ制作スタジオ"
           sub={`UpGear v4.6 — ${item?.label ?? "—"}`}
         />
-        <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 4 }}>
-          {(recommendations.length > 0 || researchPanelData) && (
-            <button onClick={() => setResearchPanelOpen(v => !v)} style={{
-              padding: "6px 14px", background: researchPanelOpen ? "rgba(255,107,0,0.12)" : "none",
-              border: `1px solid ${researchPanelOpen ? "var(--accent)" : "var(--border)"}`,
-              color: researchPanelOpen ? "var(--accent)" : "var(--text-dim)", fontSize: 11, cursor: "pointer",
-            }}>◐ 市場調査</button>
-          )}
-          {onNavToResearch && (
-            <button onClick={() => onNavToResearch(item?.id)} style={{
-              padding: "6px 14px", background: "none", border: "1px solid var(--border)",
-              color: "var(--text-dim)", fontSize: 11, cursor: "pointer",
-            }}>◐ 市場調査AI（全画面）</button>
-          )}
-        </div>
       </div>
-      {researchApply && researchBanner && (
-        <div style={{
-          marginBottom: 12, padding: "10px 14px", background: "rgba(255,107,0,0.08)",
-          border: "1px solid var(--accent)", display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <div style={{ fontSize: 11, color: "var(--accent)" }}>
-            ◐ 市場調査から反映済み — フック・フォーマットが設定されています。Step3からスライド構築へ進んでください。
-          </div>
-          <button onClick={() => { setResearchBanner(false); onClearResearch?.(); }} style={{
-            background: "none", border: "none", color: "var(--text-dim)", fontSize: 12, cursor: "pointer",
-          }}>✕</button>
-        </div>
-      )}
       {stepBar}
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}

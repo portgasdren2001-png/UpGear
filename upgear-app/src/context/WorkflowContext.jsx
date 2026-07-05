@@ -4,7 +4,6 @@ const WorkflowContext = createContext(null);
 
 export const WORKFLOW_STEPS = [
   { id: "item",     label: "商品選択",     short: "商品",   page: "stock" },
-  { id: "research", label: "市場調査",     short: "調査",   page: "research" },
   { id: "studio",   label: "制作スタジオ", short: "制作",   page: "script" },
   { id: "post",     label: "投稿保存",     short: "投稿",   page: "posts" },
   { id: "master",   label: "マスター更新", short: "更新",   page: "master" },
@@ -12,7 +11,6 @@ export const WORKFLOW_STEPS = [
 
 export function WorkflowProvider({ children, onNav }) {
   const [activeItemId, setActiveItemId] = useState(null);
-  const [researchResult, setResearchResult] = useState(null);
   const [studioApply, setStudioApply] = useState(null);
   const [completedSteps, setCompletedSteps] = useState(new Set());
 
@@ -25,16 +23,6 @@ export function WorkflowProvider({ children, onNav }) {
     completeStep("item");
   }, [completeStep]);
 
-  const applyResearch = useCallback((result) => {
-    setResearchResult(result);
-    completeStep("research");
-  }, [completeStep]);
-
-  const goToResearch = useCallback((itemId) => {
-    if (itemId) setActiveItemId(itemId);
-    onNav("research");
-  }, [onNav]);
-
   const goToStudio = useCallback((itemId, researchPayload) => {
     if (itemId) setActiveItemId(itemId);
     if (researchPayload) setStudioApply(researchPayload);
@@ -45,7 +33,6 @@ export function WorkflowProvider({ children, onNav }) {
 
   const resetWorkflow = useCallback(() => {
     setActiveItemId(null);
-    setResearchResult(null);
     setStudioApply(null);
     setCompletedSteps(new Set());
   }, []);
@@ -53,10 +40,9 @@ export function WorkflowProvider({ children, onNav }) {
   return (
     <WorkflowContext.Provider value={{
       activeItemId, setActiveItemId,
-      researchResult, applyResearch,
       studioApply, clearStudioApply,
       completedSteps, completeStep,
-      selectItem, goToResearch, goToStudio,
+      selectItem, goToStudio,
       resetWorkflow,
     }}>
       {children}
