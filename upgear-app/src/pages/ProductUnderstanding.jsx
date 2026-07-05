@@ -477,6 +477,353 @@ function FieldRow({ field, value, onChange }) {
   );
 }
 
+
+// ─── ChatGPT output parser ────────────────────────────────────────────────────
+
+// Maps every Japanese label variant → field key
+const LABEL_MAP = {
+  // 基本情報
+  "商品名":           "name",
+  "ブランド":         "brand",
+  "カテゴリ":         "category",
+  "型番":             "modelNumber",
+  "発売日":           "releaseDate",
+  "価格":             "price",
+  "公式url":          "officialUrl",
+  "公式URL":          "officialUrl",
+  "販売url":          "salesUrl",
+  "販売URL":          "salesUrl",
+  "商品画像url":      "imageUrl",
+  "商品画像URL":      "imageUrl",
+  "janコード":        "janCode",
+  "JANコード":        "janCode",
+
+  // 商品理解
+  "商品概要":                   "overview",
+  "解決する悩み":               "problemSolved",
+  "主な機能":                   "features",
+  "強み":                       "strengths",
+  "弱み":                       "weaknesses",
+  "向いている人":               "forWho",
+  "向いていない人":             "notForWho",
+  "使用シーン":                 "useScenes",
+  "購入理由（なぜ選ばれるか）": "buyReason",
+  "購入理由":                   "buyReason",
+  "なぜ選ばれるか":             "buyReason",
+  "比較される商品":             "comparedProducts",
+  "競合商品":                   "competitors",
+  "購入前に悩まれるポイント":   "buyingConcerns",
+  "よくある質問（faq）":        "faq",
+  "よくある質問（FAQ）":        "faq",
+  "よくある質問":               "faq",
+  "faq":                        "faq",
+  "FAQ":                        "faq",
+
+  // レビュー分析
+  "楽天レビュー要約":   "rakutenReview",
+  "amazonレビュー要約": "amazonReview",
+  "Amazonレビュー要約": "amazonReview",
+  "高評価で多い意見":   "positiveReviews",
+  "低評価で多い意見":   "negativeReviews",
+  "長期使用レビュー":   "longTermReview",
+  "バッテリー評価":     "batteryEval",
+  "耐久性":             "durability",
+  "替刃・消耗品コスト": "consumableCost",
+  "肌質別評価":         "skinTypeEval",
+  "レビュー総評":       "reviewSummary",
+
+  // 市場分析
+  "tiktokで伸びている訴求":  "tiktokTrends",
+  "TikTokで伸びている訴求":  "tiktokTrends",
+  "tiktok投稿傾向":          "tiktokPattern",
+  "TikTok投稿傾向":          "tiktokPattern",
+  "youtubeレビュー傾向":     "youtubePattern",
+  "YouTubeレビュー傾向":     "youtubePattern",
+  "google検索ニーズ":        "googleNeeds",
+  "Google検索ニーズ":        "googleNeeds",
+  "30〜40代男性の購入理由":  "mensBuyReason",
+  "買われない理由":          "notBoughtReason",
+  "差別化ポイント":          "differentiation",
+  "市場での立ち位置":        "marketPosition",
+
+  // UPGEAR評価
+  "装備性":          "gearScore",
+  "判断削減力":      "judgmentReduction",
+  "継続運用性":      "continuity",
+  "コスパ":          "costPerformance",
+  "デザイン性":      "designScore",
+  "総合点（100点満点）": "totalScore",
+  "総合点":          "totalScore",
+  "評価理由":        "evalReason",
+  "一言まとめ":      "oneLiner",
+
+  // SNS用
+  "tiktok訴求":               "tiktokAngles",
+  "TikTok訴求":               "tiktokAngles",
+  "投稿フック（5案）":        "hook",
+  "投稿フック":               "hook",
+  "保存されやすいポイント":   "saveablePoints",
+  "コメントが増えそうなテーマ": "commentThemes",
+  "避ける表現":               "avoidExpressions",
+  "検索キーワード":           "searchKeywords",
+  "ハッシュタグ候補":         "hashtags",
+
+  // AI用
+  "chatgpt分析全文":          "chatgptFullText",
+  "ChatGPT分析全文":          "chatgptFullText",
+  "情報源（調査したサイト一覧）": "sources",
+  "情報源（調査サイト一覧）": "sources",
+  "情報源":                   "sources",
+  "推定事項":                 "estimations",
+  "情報不足":                 "missingInfo",
+  "次に調査すべき項目":       "nextResearch",
+  "作成日時":                 "createdAt",
+  "更新日時":                 "updatedAt",
+};
+
+/**
+ * Parse ChatGPT structured output into an object keyed by understanding field keys.
+ * Handles: "# 【セクション】", "【セクション】", "- ラベル", "ラベル：", "ラベル: " etc.
+ */
+function parseChatGPTOutput(text) {
+  const result = {};
+  if (!text?.trim()) return result;
+
+  const lines = text.split("\n");
+  let currentLabel = null;
+  let buffer = [];
+
+  const flush = () => {
+    if (!currentLabel) return;
+    const key = resolveKey(currentLabel);
+    if (key) {
+      result[key] = (result[key] ? result[key] + "\n" : "") + buffer.join("\n").trim();
+    }
+    currentLabel = null;
+    buffer = [];
+  };
+
+  // Normalize a label string for lookup
+  const normalize = (s) => s.trim().replace(/\s+/g, "").replace(/：$/, "").replace(/:$/, "");
+
+  const resolveKey = (label) => {
+    const n = normalize(label);
+    // Exact match first
+    if (LABEL_MAP[n]) return LABEL_MAP[n];
+    // Case-insensitive
+    const lower = n.toLowerCase();
+    for (const [k, v] of Object.entries(LABEL_MAP)) {
+      if (k.toLowerCase() === lower) return v;
+    }
+    return null;
+  };
+
+  // Regex: section headers (skip, just markers)
+  const sectionRe = /^#{0,3}\s*[【\[]([^\]】]+)[】\]]\s*$/;
+  // Regex: field label line — "- ラベル" or "ラベル：" or "ラベル: "
+  const fieldRe   = /^(?:-\s*)?([^\n：:]+)[：:]\s*(.*)$/;
+  // Regex: "- label" alone (no colon, next line is value)
+  const bulletRe  = /^-\s+(.+)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = raw.trimEnd();
+
+    // Skip section headers
+    if (sectionRe.test(line)) {
+      flush();
+      continue;
+    }
+
+    // "- label：value" or "label：value"
+    const fm = line.match(fieldRe);
+    if (fm) {
+      const labelCandidate = fm[1].trim();
+      const valueInline    = fm[2].trim();
+      if (resolveKey(labelCandidate)) {
+        flush();
+        currentLabel = labelCandidate;
+        if (valueInline) buffer.push(valueInline);
+        continue;
+      }
+    }
+
+    // "- label" (bullet with known label, no colon — value on next lines)
+    const bm = line.match(bulletRe);
+    if (bm) {
+      const labelCandidate = bm[1].trim();
+      if (resolveKey(labelCandidate)) {
+        flush();
+        currentLabel = labelCandidate;
+        continue;
+      }
+    }
+
+    // Continuation line for current field
+    if (currentLabel !== null) {
+      buffer.push(line);
+    }
+  }
+
+  flush();
+  return result;
+}
+
+// ─── PastePanel component ─────────────────────────────────────────────────────
+
+function PastePanel({ onApply }) {
+  const [open,    setOpen]    = useState(false);
+  const [text,    setText]    = useState("");
+  const [preview, setPreview] = useState(null);
+  const [confirm, setConfirm] = useState(false);
+
+  const handleParse = () => {
+    const parsed = parseChatGPTOutput(text);
+    const count  = Object.keys(parsed).length;
+    if (count === 0) {
+      alert("読み取れる項目が見つかりませんでした。\n出力フォーマットを確認してください。");
+      return;
+    }
+    setPreview({ parsed, count });
+    setConfirm(true);
+  };
+
+  const handleConfirm = (overwrite) => {
+    onApply(preview.parsed, overwrite);
+    setConfirm(false);
+    setPreview(null);
+    setText("");
+    setOpen(false);
+  };
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: "100%", textAlign: "left",
+          padding: "10px 16px",
+          background: open ? "rgba(229,192,123,0.08)" : "rgba(229,192,123,0.04)",
+          border: "1px solid rgba(229,192,123,0.35)",
+          color: "rgba(229,192,123,0.9)",
+          cursor: "pointer",
+          fontSize: 12,
+          fontFamily: "var(--font-mono)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}
+      >
+        <span>ChatGPT出力を貼り付けて自動仕分け</span>
+        <span style={{ fontSize: 14 }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          background: "var(--bg2)",
+          border: "1px solid rgba(229,192,123,0.35)",
+          borderTop: "none",
+          padding: "20px 20px 16px",
+        }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 10, lineHeight: 1.6 }}>
+            ChatGPTの出力全文をそのまま貼り付けてください。「# 【基本情報】」などの見出しと項目を読み取り、各フォーム欄に自動入力します。
+          </div>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder={"# 【基本情報】\n- 商品名：○○○\n- ブランド：△△△\n...\n\n# 【商品理解】\n- 商品概要：…"}
+            rows={14}
+            style={{
+              width: "100%",
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              color: "var(--text)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 12,
+              padding: "10px 12px",
+              boxSizing: "border-box",
+              resize: "vertical",
+              lineHeight: 1.6,
+              outline: "none",
+            }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
+              {text.trim()
+                ? `${Object.keys(parseChatGPTOutput(text)).length} 項目を検出中`
+                : "テキストを貼り付けると項目数が表示されます"}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => { setText(""); setPreview(null); setConfirm(false); }}
+                style={{ fontSize: 11, padding: "6px 12px", cursor: "pointer", background: "none", border: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
+              >
+                クリア
+              </button>
+              <button
+                onClick={handleParse}
+                disabled={!text.trim()}
+                style={{
+                  fontSize: 11, padding: "6px 16px", cursor: text.trim() ? "pointer" : "default",
+                  background: text.trim() ? "rgba(229,192,123,0.12)" : "none",
+                  border: `1px solid ${text.trim() ? "rgba(229,192,123,0.6)" : "var(--border)"}`,
+                  color: text.trim() ? "rgba(229,192,123,0.9)" : "var(--text-dim)",
+                  fontFamily: "var(--font-mono)",
+                  opacity: text.trim() ? 1 : 0.5,
+                }}
+              >
+                項目ごとに自動仕分け →
+              </button>
+            </div>
+          </div>
+
+          {confirm && preview && (
+            <div style={{
+              marginTop: 16,
+              background: "rgba(229,192,123,0.06)",
+              border: "1px solid rgba(229,192,123,0.3)",
+              padding: "16px 18px",
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "rgba(229,192,123,0.9)", marginBottom: 10 }}>
+                {preview.count} 項目を読み取りました
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 14, lineHeight: 1.7 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6, color: "var(--text)" }}>読み取り済み項目：</div>
+                {Object.entries(preview.parsed).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", gap: 8, marginBottom: 3 }}>
+                    <span style={{ color: "rgba(229,192,123,0.7)", minWidth: 140 }}>{k}</span>
+                    <span style={{ color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 360 }}>
+                      {v.replace(/\n/g, " ").substring(0, 80)}{v.length > 80 ? "…" : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                <button
+                  onClick={() => setConfirm(false)}
+                  style={{ fontSize: 11, padding: "6px 14px", cursor: "pointer", background: "none", border: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => handleConfirm(false)}
+                  style={{ fontSize: 11, padding: "6px 14px", cursor: "pointer", background: "none", border: "1px solid var(--accent)", color: "var(--accent)", fontFamily: "var(--font-mono)" }}
+                >
+                  空欄のみ埋める
+                </button>
+                <button
+                  onClick={() => handleConfirm(true)}
+                  style={{ fontSize: 11, padding: "6px 14px", cursor: "pointer", background: "rgba(229,192,123,0.12)", border: "1px solid rgba(229,192,123,0.6)", color: "rgba(229,192,123,0.9)", fontFamily: "var(--font-mono)" }}
+                >
+                  すべて上書きして反映
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProductUnderstanding({ item, updateItem, onBack }) {
@@ -532,6 +879,18 @@ export default function ProductUnderstanding({ item, updateItem, onBack }) {
     setPromptCopied(true);
     setTimeout(() => setPromptCopied(false), 2500);
   };
+
+  const handlePasteApply = useCallback((parsed, overwrite) => {
+    setU(prev => {
+      const next = { ...prev };
+      for (const [key, val] of Object.entries(parsed)) {
+        if (overwrite || !prev[key]?.trim()) {
+          next[key] = val;
+        }
+      }
+      return next;
+    });
+  }, []);
 
   if (!item) return (
     <div style={{ padding: 40, textAlign: "center", color: "var(--text-dim)" }}>
@@ -608,6 +967,9 @@ export default function ProductUnderstanding({ item, updateItem, onBack }) {
           </Btn>
         </div>
       </div>
+
+      {/* Paste panel */}
+      <PastePanel onApply={handlePasteApply} />
 
       {/* ChatGPT prompt hint */}
       <div style={{ background: "rgba(198,120,221,0.05)", border: "1px solid rgba(198,120,221,0.25)", padding: "10px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
