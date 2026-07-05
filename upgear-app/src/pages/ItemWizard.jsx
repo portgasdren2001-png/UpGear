@@ -205,6 +205,57 @@ function ConfidenceBadge({ confidence }) {
   );
 }
 
+function SummaryCard({ summary, categoryConfidence, categoryCandidates }) {
+  if (!summary) return null;
+
+  const conf = summary.confidence ?? categoryConfidence ?? 0;
+  const confColor = conf >= 90 ? "#98c379" : conf >= 70 ? "var(--accent)" : "#e06c75";
+
+  const Row = ({ label, value, warn }) => (
+    <div style={{ display: "flex", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+      <div style={{ fontSize: 10, color: "var(--text-dim)", width: 100, flexShrink: 0 }}>{label}</div>
+      <div style={{ flex: 1, fontSize: 11, color: warn ? "#e06c75" : "var(--text)", lineHeight: 1.5 }}>
+        {value || <span style={{ color: "#e06c75" }}>— 未取得</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "var(--bg2)", border: "2px solid var(--accent)", padding: "16px 20px", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: "var(--accent)", letterSpacing: "0.15em" }}>商品理解サマリー</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: confColor }}>{conf}<span style={{ fontSize: 11 }}>%</span></div>
+          <div style={{ fontSize: 10, color: "var(--text-dim)" }}>理解信頼度</div>
+        </div>
+      </div>
+      <div style={{ height: 4, background: "var(--border)", marginBottom: 14 }}>
+        <div style={{ width: `${conf}%`, height: "100%", background: confColor, transition: "width 0.6s ease" }} />
+      </div>
+
+      <Row label="商品名" value={summary.productName} />
+      <Row label="ブランド" value={summary.brand} />
+      <Row
+        label="商品カテゴリ"
+        value={summary.category === "不明" || !summary.category
+          ? (categoryCandidates?.length
+              ? `不明 — 候補: ${categoryCandidates.join(" / ")}`
+              : "不明")
+          : summary.category}
+        warn={!summary.category || summary.category === "不明"}
+      />
+      <Row label="何に使うか" value={summary.purpose} />
+      <Row label="主な機能" value={summary.mainFeatures?.join(" / ")} />
+      <Row label="想定ユーザー" value={summary.targetUser} />
+      <Row label="価格帯" value={summary.priceRange} />
+      <Row label="口コミ評価" value={summary.reviewSummary} />
+      <Row label="不満点" value={summary.complaints?.join(" / ")} />
+      <Row label="UpGear装備価値" value={summary.upgearValue} />
+      <Row label="誤認リスク" value={summary.misjudgmentRisk} />
+    </div>
+  );
+}
+
 function DebugPanel({ debug, categoryInfo, visible }) {
   if (!visible || !debug) return null;
   return (
@@ -246,6 +297,7 @@ function Step2({ urls, item, onComplete, onBack }) {
   const [dataSource, setDataSource] = useState(null);
   const [playwrightOk, setPlaywrightOk] = useState(null);
   const [serverAvailable, setServerAvailable] = useState(null);
+  const [categoryUnknown, setCategoryUnknown] = useState(false);
   const abortRef = useRef(null);
 
   const urlCount = Object.values(urls).filter(Boolean).length;
@@ -315,6 +367,13 @@ function Step2({ urls, item, onComplete, onBack }) {
                 setDataSource(evt.dataSource || null);
                 setPlaywrightOk(evt.playwrightOk !== false);
                 if (!cancelled) setDone(true);
+                // カテゴリ不明チェック: confidence<=50 or category="不明"
+                const cardEvt = evt.card;
+                const catConf = evt.confidence ?? 0;
+                const catVal = cardEvt?.summary?.category || cardEvt?.category;
+                if (catConf <= 50 || !catVal || catVal === "不明") {
+                  setCategoryUnknown(true);
+                }
               } else if (evt.type === "error") {
                 setError(evt.message);
               }
@@ -441,28 +500,69 @@ function Step2({ urls, item, onComplete, onBack }) {
         </div>
       )}
 
-      {/* Confirmation gate for low confidence */}
-      {done && card && requiresConfirmation && (
-        <div style={{ background: "rgba(255,107,0,0.08)", border: "1px solid var(--accent)", padding: "12px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600, marginBottom: 4 }}>
-            カテゴリ信頼度 {confidence}% — 確認が必要です
+      {/* Category unknown blocker */}
+      {done && card && categoryUnknown && (
+        <div style={{ background: "rgba(224,108,117,0.08)", border: "2px solid #e06c75", padding: "14px 18px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, color: "#e06c75", fontWeight: 700, marginBottom: 6 }}>
+            カテゴリが確定できませんでした
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
-            推定: <strong style={{ color: "var(--text)" }}>{card.category || "不明"}</strong>　›　<strong style={{ color: "var(--text)" }}>{card.subCategory || "不明"}</strong>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>
+            信頼度: <strong style={{ color: "#e06c75" }}>{confidence}%</strong>　カテゴリ: <strong style={{ color: "var(--text)" }}>{card.summary?.category || card.category || "不明"}</strong>
           </div>
-          <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 4 }}>
-            根拠: {card.categorySource || "—"}
+          {card.categoryCandidates?.length > 0 && (
+            <div style={{ fontSize: 11, color: "var(--text)" }}>
+              候補: <strong>{card.categoryCandidates.join(" / ")}</strong> — どれですか？
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 6 }}>
+            「カテゴリを修正する」でカテゴリを手動指定するか、「商品情報を再取得する」でURLを追加してください。
           </div>
         </div>
+      )}
+
+      {/* Summary card */}
+      {done && card && (
+        <SummaryCard
+          summary={card.summary}
+          categoryConfidence={card.categoryConfidence}
+          categoryCandidates={card.categoryCandidates}
+        />
       )}
 
       {done && card && (
         <div>
           <UnderstandingScore score={card.understandingScore} missing={card.missingFields || []} />
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
             <Btn small onClick={() => onBack()}>← URL修正</Btn>
-            <Btn variant="primary" onClick={() => onComplete(card)}>確認画面へ →</Btn>
+            <Btn small onClick={() => {
+              // カテゴリ修正: categoryUnknown をリセットして確認画面へ（Step3 で手動修正）
+              setCategoryUnknown(false);
+              onComplete({ ...card, _needsCategoryFix: true });
+            }}>
+              カテゴリを修正する
+            </Btn>
+            <Btn small onClick={() => {
+              // 商品情報を再取得: Step1へ戻る
+              setDone(false);
+              setCard(null);
+              setError(null);
+              setStageStatus({});
+              setProgressLog([]);
+              setCategoryUnknown(false);
+              onBack();
+            }}>
+              商品情報を再取得する
+            </Btn>
+            <Btn variant="primary" disabled={categoryUnknown} onClick={() => onComplete(card)}
+              style={categoryUnknown ? { opacity: 0.4, cursor: "not-allowed" } : {}}>
+              この理解で台本生成する →
+            </Btn>
           </div>
+          {categoryUnknown && (
+            <div style={{ fontSize: 10, color: "#e06c75", textAlign: "right", marginTop: 6 }}>
+              カテゴリを確定してから台本生成してください
+            </div>
+          )}
         </div>
       )}
     </div>

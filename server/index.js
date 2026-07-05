@@ -411,6 +411,10 @@ function buildProductCard(ai, scraped, vision, rakutenData) {
       negative: rdSrc.negative || [],
     },
 
+    // ─── 商品理解サマリー
+    summary:            ai.summary || null,
+    categoryCandidates: ai.categoryCandidates || [],
+
     // ─── メタ情報
     searchKeywords:  ai.searchKeywords || [],
     inferenceMethod: ai.inferenceMethod || '',

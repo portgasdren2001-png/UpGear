@@ -89,19 +89,23 @@ export async function analyzeProduct(scraped, visionResult, existingCategoryInfo
     categoryHint:   existingCategoryInfo || null,
   };
 
-  const systemPrompt = `あなたはUpGearの商品判断AIです。
+  const systemPrompt = `あなたはUpGearの「商品理解エンジン」です。
+SNS台本はまだ生成しません。まず商品を正確に理解することが目標です。
+
+## フェーズ1: 商品理解（このプロンプトの役割）
+- 商品が「何であるか」「誰のためのものか」「何の問題を解くか」を確実に把握する
+- カテゴリを全情報源（楽天ジャンル・説明・レビュー・Vision解析）から厳密に判定する
+- カテゴリが確定できない場合は候補を列挙し、信頼度を下げて返す（推測で埋めない）
 
 ## UpGearの思想
 - ギアとは「判断を減らすための装備」
-- 良い商品を探すのではなく、「日常の迷い・手間・失敗を減らす装備」を見つける
+- 良い商品ではなく「日常の迷い・手間・失敗を減らす装備」を評価する
 - 誰にでも勧めない。向いていない人を必ず先に出す
-- デスクワーカー・通勤・日常運用・継続使用を重視する
 - 価格より「判断削減・継続運用・代替不可能性」を重視する
-- 一般的なレビューサイトの評価軸（コスパ・デザイン・スペック）は補助情報に過ぎない
 
 ## 判断基準
 - 情報が不足している場合は無理に評価せず「情報不足」「要確認」とする
-- 曖昧な場合は高評価にしない
+- カテゴリが判定できない場合: categoryConfidence を 50 以下にし、categoryCandidates に候補を列挙する
 - UpGearスコアは厳しく採点する（80点以上 = 多くの人の日常判断を確実に減らせる）`;
 
   const prompt = `以下の商品データをUpGear思想で評価してください。
@@ -172,7 +176,24 @@ ${JSON.stringify(context, null, 2)}
   "inferenceMethod": "判定方法（楽天APIデータ中心 / Playwright + 楽天API / フォールバックなど）",
 
   "dataQuality": "excellent / good / limited / insufficient（入力データの質の評価）",
-  "dataQualityNote": "データ不足の場合に何が足りないか"
+  "dataQualityNote": "データ不足の場合に何が足りないか",
+
+  "categoryCandidates": ["カテゴリ不明時の候補1", "候補2", "候補3"],
+
+  "summary": {
+    "productName": "正確な商品名（不明なら空文字）",
+    "brand": "ブランド名（不明なら空文字）",
+    "category": "商品カテゴリ（確定できない場合は「不明」）",
+    "purpose": "何に使うか（1〜2文で具体的に）",
+    "mainFeatures": ["主な機能1", "主な機能2", "主な機能3"],
+    "targetUser": "想定ユーザー（具体的な属性・状況）",
+    "priceRange": "価格帯（例: ¥3,000〜5,000）",
+    "reviewSummary": "口コミ評価（平均点・件数・傾向を1文で）",
+    "complaints": ["実際の不満点1", "不満点2"],
+    "upgearValue": "UpGear装備としての価値（判断削減の観点で1〜2文）",
+    "misjudgmentRisk": "誤認リスク（この商品を誤解しやすいポイント）",
+    "confidence": 理解信頼度(0-100の整数。カテゴリ不確定なら50以下)
+  }
 }
 
 必ずJSONのみを返してください。説明文は不要です。`;
