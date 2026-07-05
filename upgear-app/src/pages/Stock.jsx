@@ -86,7 +86,7 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
 
   return (
     <div
-      title="ダブルクリックで商品理解AIを開く"
+      title={item.label}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
@@ -105,7 +105,6 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3, flexWrap: "wrap" }}>
             <span style={{ fontSize: 9, color: "var(--text-dim)" }}>No.{item.no}</span>
-            <StatusBadge status={status} />
             <GenreBadge genre={manualGenre} manual={true} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -113,40 +112,27 @@ function ItemCard({ item, selected, onClick, onDoubleClick, onWizard, onNavToStu
           </div>
           {item.brand && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{item.brand}</div>}
         </div>
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: cfg.color }}>{item.score}点</div>
-          <div style={{ fontSize: 9, color: "var(--text-dim)" }}>UpGear</div>
-        </div>
+
       </div>
 
       {/* Data row */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, fontSize: 10, color: "var(--text-dim)", alignItems: "center" }}>
-        {(rb?.price || item.price) && (
+        {item.price && (
           <span style={{ color: "var(--text)" }}>
-            ¥{Number(rb?.price || item.price).toLocaleString()}
+            ¥{Number(item.price).toLocaleString()}
           </span>
         )}
-        {rb?.reviewCount && (
-          <span>★{rb.reviewAverage} ({rb.reviewCount?.toLocaleString()}件)</span>
-        )}
-        {rb?.url && <span style={{ color: "#e07b4c" }}>楽天あり</span>}
-        {item.card?.understandingScore != null && (
-          <span>理解:{item.card.understandingScore}点</span>
-        )}
-        {hovered && !selected && (
-          <span style={{ color: "var(--accent)", fontSize: 9, marginLeft: "auto" }}>ダブルクリックで商品理解AI</span>
-        )}
+        {item.brand && <span>{item.brand}</span>}
       </div>
 
       {/* Actions when selected */}
       {selected && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
-          <Btn small onClick={() => onWizard(item)}>{item.card ? "再分析" : "商品理解AI"}</Btn>
           {onNavToUnderstanding && (
-            <Btn small onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解</Btn>
+            <Btn small variant="primary" onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解を開く</Btn>
           )}
           {onNavToStudio && (
-            <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>
+            <Btn small onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>
           )}
         </div>
       )}
@@ -192,14 +178,7 @@ function GenreSelector({ item, genres, onSave }) {
         </button>
       </div>
 
-      {/* 推定ジャンル（参考表示） */}
-      {inferredGenre && (
-        <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: open ? 10 : 0 }}>
-          推定ジャンル（AI/楽天API）:&nbsp;
-          <span style={{ color: "#6fa8dc" }}>{inferredGenre}</span>
-          &nbsp;—&nbsp;参考表示のみ。手動設定で上書きされます。
-        </div>
-      )}
+
 
       {/* ジャンル一覧 */}
       {open && (
@@ -245,39 +224,22 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
     </div>
   );
 
-  const card = item.card;
-  const rb = item.rakuten || card?.rakuten;
-  const status = getItemStatus(item);
-  const cfg = STATUS_CONFIG[status];
-
-  const sources = [];
-  if (rb) sources.push("楽天API");
-  if (card?.fetchedAt) sources.push("Playwright");
-  if (card?.whatIsThis) sources.push("Claude AI");
-  if (sources.length === 0) sources.push("手動");
+  // 自動分析変数（一旦不使用 — 復活時はコメント解除）
+  // const card = item.card;
+  // const rb = item.rakuten || card?.rakuten;
+  // const status = getItemStatus(item);
+  // const cfg = STATUS_CONFIG[status];
 
   return (
     <div>
       {/* Actions */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", justifyContent: "flex-end" }}>
-        <Btn small onClick={() => onWizard(item)}>{card ? "再分析・編集" : "商品理解AIを実行"}</Btn>
-        {onNavToUnderstanding && <Btn small onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解</Btn>}
-        {onNavToStudio && <Btn small variant="primary" onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>}
+        {onNavToUnderstanding && <Btn small variant="primary" onClick={() => onNavToUnderstanding(item.id)}>◍ 商品理解を開く</Btn>}
+        {onNavToStudio && <Btn small onClick={() => onNavToStudio(item.id)}>▣ 制作スタジオ</Btn>}
         {onDelete && <Btn small variant="danger" onClick={() => onDelete(item.id)}>削除</Btn>}
       </div>
 
-      {/* Status */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: cfg.bg, border: `1px solid ${cfg.color}`, marginBottom: 16 }}>
-        <StatusBadge status={status} />
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {sources.map(s => <SourceTag key={s} source={s} />)}
-        </div>
-        {item.analysisAt && (
-          <span style={{ fontSize: 9, color: "var(--text-dim)", marginLeft: "auto" }}>
-            {new Date(item.analysisAt).toLocaleString("ja-JP")}
-          </span>
-        )}
-      </div>
+
 
       {/* ─ ジャンル手動選択 ─ */}
       <div style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "12px 14px", marginBottom: 16 }}>
@@ -287,7 +249,7 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
         <GenreSelector item={item} genres={genres} onSave={onUpdateItem} />
       </div>
 
-      {/* 不足情報 */}
+      {/* 自動分析: 不足情報（一旦非表示）
       {(item.missingReasons || []).length > 0 && (
         <div style={{ background: "rgba(224,108,117,0.08)", border: "1px solid rgba(224,108,117,0.3)", padding: "10px 14px", marginBottom: 16 }}>
           <div style={{ fontSize: 9, color: "#e06c75", letterSpacing: "0.15em", marginBottom: 6 }}>不足情報</div>
@@ -296,8 +258,9 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
           ))}
         </div>
       )}
+      */}
 
-      {/* 楽天データ */}
+      {/* 自動分析セクション（一旦非表示 — 将来の自動分析復活時はここのコメントを外す）
       <Section title="楽天API取得データ" color="#e07b4c">
         <Row label="商品名"       value={rb?.name} source="楽天API" />
         <Row label="価格"         value={rb?.price ? `¥${Number(rb.price).toLocaleString()}` : null} source="楽天API" />
@@ -305,58 +268,21 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
         <Row label="レビュー平均" value={rb?.reviewAverage ? `★${rb.reviewAverage}` : null} source="楽天API" />
         <Row label="楽天URL"      value={rb?.url} source="楽天API" link />
         <Row label="ショップ名"   value={rb?.shopName} source="楽天API" />
-        {rb?.imageUrl && (
-          <div style={{ padding: "8px 0" }}>
-            <span style={{ fontSize: 10, color: "var(--text-dim)", display: "block", marginBottom: 4 }}>画像</span>
-            <img src={rb.imageUrl} alt="商品画像" style={{ maxWidth: 80, maxHeight: 80, objectFit: "contain", border: "1px solid var(--border)" }} />
-          </div>
-        )}
         {!rb && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>楽天API未取得</div>}
       </Section>
-
-      <Section title="Playwright取得データ" color="#6fa8dc">
-        <Row label="ブランド"     value={card?.brand} source="Playwright" />
-        <Row label="推定ジャンル" value={getInferredGenre(item)} source="Playwright" />
-        <Row label="小カテゴリ"   value={item.subCategory || card?.subCategory} source="Playwright" />
-        <Row label="信頼度"       value={card?.categoryConfidence ? `${card.categoryConfidence}%` : null} source="Playwright" />
-        {!card && <div style={{ fontSize: 11, color: "var(--text-dim)", padding: "8px 0" }}>Playwright未実行</div>}
-      </Section>
-
-      {card && (
-        <Section title="Claude AI解析データ" color="#98c379">
-          {card.understandingScore != null && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>商品理解スコア</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "#98c379" }}>{card.understandingScore}点</span>
-              </div>
-              <div style={{ height: 4, background: "var(--border)" }}>
-                <div style={{ width: `${card.understandingScore}%`, height: "100%", background: "#98c379" }} />
-              </div>
-            </div>
-          )}
-          <Row label="商品説明"       value={card.whatIsThis} source="Claude AI" />
-          <Row label="課題解決"       value={card.whatItSolves} source="Claude AI" />
-          <Row label="向いている人"   value={card.forWho} source="Claude AI" />
-          <Row label="向いていない人" value={(card.notForWho || []).join(" / ")} source="Claude AI" />
-          <Row label="強み"           value={(card.strengths || []).join("、")} source="Claude AI" />
-          <Row label="弱み"           value={(card.weaknesses || []).join("、")} source="Claude AI" />
-        </Section>
-      )}
-
+      <Section title="Playwright取得データ" color="#6fa8dc">...</Section>
+      <Section title="Claude AI解析データ" color="#98c379">...</Section>
       <Section title="UpGear評価">
         <Row label="UpGearスコア" value={`${item.score}点`} />
         <Row label="判定"         value={item.judgment} />
-        <Row label="価格（手動）" value={item.price ? `¥${Number(item.price).toLocaleString()}` : null} />
       </Section>
+      */}
 
-      {card?.searchKeywords?.length > 0 && (
-        <Section title="検索キーワード" color="#98c379">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {card.searchKeywords.map((kw) => (
-              <span key={kw} style={{ fontSize: 11, background: "var(--bg2)", border: "1px solid var(--border)", padding: "3px 10px" }}>{kw}</span>
-            ))}
-          </div>
+      {/* 手動登録データ */}
+      {item.price && (
+        <Section title="基本情報">
+          <Row label="価格" value={`¥${Number(item.price).toLocaleString()}`} />
+          {item.brand && <Row label="ブランド" value={item.brand} />}
         </Section>
       )}
 
@@ -368,6 +294,23 @@ function DetailPanel({ item, genres, onWizard, onNavToStudio, onNavToUnderstandi
               <a href={v} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#6fa8dc", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{v}</a>
             </div>
           ))}
+        </Section>
+      )}
+
+      {/* 商品理解データが保存済みの場合サマリー表示 */}
+      {item.understanding && Object.values(item.understanding).some(v => v?.trim?.()) && (
+        <Section title="商品理解データ（保存済み）" color="var(--accent)">
+          {item.understanding.overview && <Row label="概要" value={item.understanding.overview} />}
+          {item.understanding.strengths && <Row label="強み" value={item.understanding.strengths} />}
+          {item.understanding.oneLiner && <Row label="一言まとめ" value={item.understanding.oneLiner} />}
+          <div style={{ marginTop: 8 }}>
+            <button
+              onClick={() => onNavToUnderstanding?.(item.id)}
+              style={{ background: "none", border: "1px solid var(--accent)", color: "var(--accent)", fontSize: 10, padding: "4px 12px", cursor: "pointer", fontFamily: "var(--font-mono)" }}
+            >
+              ◍ 商品理解を開いて編集
+            </button>
+          </div>
         </Section>
       )}
     </div>
@@ -626,7 +569,7 @@ export default function Stock({
 
       {/* ショートカットヒント */}
       <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        {[["クリック","詳細表示"],["ダブルクリック","商品理解AI"],["Delete","削除"],["F2","編集"],["Ctrl+D","複製"],["Ctrl+F","検索"]].map(([k,v]) => (
+        {[["クリック","詳細表示"],["Delete","削除"],["Ctrl+D","複製"],["Ctrl+F","検索"]].map(([k,v]) => (
           <span key={k} style={{ fontSize: 9, color: "var(--text-dim)" }}>
             <kbd style={{ background: "var(--bg2)", border: "1px solid var(--border)", padding: "1px 5px", borderRadius: 2, fontFamily: "var(--font-mono)" }}>{k}</kbd>
             {" "}{v}
