@@ -16,20 +16,30 @@ import { getTopRecommendations } from "../data/marketResearchAI";
 
 /* ─── helpers ─── */
 
+// Format helpers for new slide structure:
+// S1: { intro, hook, note }  → 上段/中央/下段
+// S2-S6: { title, body1, body2 }  → 大タイトル/本文1/本文2
+
 function optToText(opt) {
   if (!opt) return "";
   if (typeof opt === "string") return opt;
-  if (opt.sub !== undefined || opt.main !== undefined) {
-    return [opt.sub, opt.main, opt.note].filter(Boolean).join("  /  ");
+  if (opt.hook !== undefined) {
+    return [opt.intro, opt.hook, opt.note].filter(Boolean).join("  /  ");
+  }
+  if (opt.title !== undefined) {
+    return [opt.title, opt.body1, opt.body2].filter(Boolean).join("  /  ");
   }
   return opt.text || "";
 }
 
-function optToScript(opt, role) {
+function optToScript(opt, isHook) {
   if (!opt) return "";
   if (typeof opt === "string") return opt;
-  if (opt.sub !== undefined || opt.main !== undefined) {
-    return `サブ: ${opt.sub || ""}\nメイン: ${opt.main || ""}\n補足: ${opt.note || ""}`;
+  if (opt.hook !== undefined || isHook) {
+    return `上段: ${opt.intro || ""}\n大フック: ${opt.hook || ""}\n下段: ${opt.note || ""}`;
+  }
+  if (opt.title !== undefined) {
+    return `大タイトル: ${opt.title || ""}\n本文1: ${opt.body1 || ""}\n本文2: ${opt.body2 || ""}`;
   }
   return opt.text || "";
 }
@@ -44,47 +54,54 @@ function SectionLabel({ children, color = "var(--accent)" }) {
   );
 }
 
-function SlideOptionCard({ opt, selected, onClick, label }) {
-  const text = optToText(opt);
-  const isHookFormat = opt && (opt.sub !== undefined || opt.main !== undefined);
+function SlideOptionCard({ opt, selected, onClick, label, isHook }) {
   const archetypeColor = opt?.archetypeColor;
-  const archetype = opt?.archetype;
-  const borderColor = selected ? (archetypeColor || "var(--accent)") : "var(--border)";
-  const bgColor = selected ? (archetypeColor ? archetypeColor + "18" : "rgba(255,107,0,0.12)") : "var(--bg2)";
+  const archetype      = opt?.archetype;
+  const borderColor    = selected ? (archetypeColor || "var(--accent)") : "var(--border)";
+  const bgColor        = selected ? (archetypeColor ? archetypeColor + "18" : "rgba(255,107,0,0.12)") : "var(--bg2)";
+
+  const dimStyle  = { fontSize: 9, color: "var(--text-dim)", marginBottom: 2, letterSpacing: "0.08em" };
+  const textStyle = (big) => ({ fontSize: big ? 16 : 12, fontWeight: big ? 700 : 400, color: selected ? "var(--text)" : "var(--text-dim)", lineHeight: 1.5 });
+
   return (
-    <div
-      onClick={onClick}
-      style={{
-        background: bgColor,
-        border: `1px solid ${borderColor}`,
-        borderRadius: 4,
-        padding: "10px 12px",
-        cursor: "pointer",
-        transition: "border-color 0.15s, background 0.15s",
-        minHeight: 70,
-      }}
-    >
-      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6 }}>
-        {archetype && (
-          <span style={{ fontSize: 8, background: archetypeColor || "var(--accent)", color: "#fff", padding: "1px 5px", fontWeight: 700, letterSpacing: "0.08em" }}>
-            {archetype}
-          </span>
-        )}
+    <div onClick={onClick} style={{ background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 4, padding: "10px 12px", cursor: "pointer", transition: "border-color 0.15s", minHeight: 80 }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        {archetype && <span style={{ fontSize: 8, background: archetypeColor || "var(--accent)", color: "#fff", padding: "1px 5px", fontWeight: 700 }}>{archetype}</span>}
         <span style={{ fontSize: 9, color: archetypeColor || "var(--accent)", letterSpacing: "0.12em" }}>{label}</span>
       </div>
-      {isHookFormat ? (
-        <div>
-          <div style={{ fontSize: 9, color: "var(--text-dim)", marginBottom: 2 }}>サブ</div>
-          <div style={{ fontSize: 11, color: selected ? "var(--text)" : "var(--text-dim)" }}>{opt.sub}</div>
-          <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 6, marginBottom: 2 }}>メイン</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: selected ? "var(--text)" : "var(--text-dim)" }}>{opt.main}</div>
-          {opt.note && <>
-            <div style={{ fontSize: 9, color: "var(--text-dim)", marginTop: 6, marginBottom: 2 }}>補足</div>
-            <div style={{ fontSize: 11, color: selected ? "var(--text-dim)" : "#50545e" }}>{opt.note}</div>
-          </>}
+
+      {(isHook || opt?.hook !== undefined) ? (
+        /* S1: 上段 / 大フック / 下段 */
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div>
+            <div style={dimStyle}>上段</div>
+            <div style={textStyle(false)}>{opt?.intro}</div>
+          </div>
+          <div>
+            <div style={dimStyle}>大フック</div>
+            <div style={textStyle(true)}>{opt?.hook}</div>
+          </div>
+          <div>
+            <div style={dimStyle}>下段</div>
+            <div style={textStyle(false)}>{opt?.note}</div>
+          </div>
         </div>
       ) : (
-        <div style={{ fontSize: 12, color: selected ? "var(--text)" : "var(--text-dim)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{text}</div>
+        /* S2-S6: 大タイトル / 本文1 / 本文2 */
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <div>
+            <div style={dimStyle}>大タイトル</div>
+            <div style={textStyle(true)}>{opt?.title}</div>
+          </div>
+          <div>
+            <div style={dimStyle}>本文1</div>
+            <div style={textStyle(false)}>{opt?.body1}</div>
+          </div>
+          <div>
+            <div style={dimStyle}>本文2</div>
+            <div style={{ ...textStyle(false), color: selected ? "var(--text-dim)" : "#50545e" }}>{opt?.body2}</div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -208,10 +225,21 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
 
   const buildFullScript = () => {
     const lines = slides.map((s, i) =>
-      `【スライド${i + 1} — ${s.role}】\n${optToScript(s.options[s.selected], s.role)}`
+      `【スライド${i + 1} — ${s.role}】\n${optToScript(s.options[s.selected], s.type === "hook")}`
     ).join("\n\n");
     const cap = captions[selectedCaption] ?? "";
     return `${lines}\n\n【キャプション】\n${cap}\n\n【ハッシュタグ】\n${hashtags}`;
+  };
+
+  const buildImagePromptsText = () => {
+    const parts = [];
+    slides.forEach((s, i) => {
+      const opt = s.options[s.selected];
+      if (!opt?.imagePrompt) return; // S4 skip
+      const slideNum = i + 1;
+      parts.push(`【${slideNum}枚目 — ${s.role}】\n${opt.imagePrompt}`);
+    });
+    return parts.join("\n\n");
   };
 
   /* ─── Step bar ─── */
@@ -500,27 +528,32 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {slides.map((s, si) => {
               const opt = s.options[s.selected];
-              const isHook = opt && opt.sub !== undefined;
+              const isHook = s.type === "hook" || opt?.hook !== undefined;
               return (
-                <div key={si} style={{ borderLeft: "2px solid var(--border)", paddingLeft: 12 }}>
+                <div key={si} style={{ borderLeft: `2px solid ${si === 3 ? "#98c379" : "var(--border)"}`, paddingLeft: 12 }}>
                   <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>
                     スライド {si + 1} — {s.role}
+                    {si === 3 && <span style={{ marginLeft: 8, fontSize: 9, color: "#98c379" }}>（実商品写真を使用）</span>}
                   </div>
                   {isHook ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>サブ: <span style={{ color: "var(--text)", fontSize: 12 }}>{opt.sub}</span></div>
-                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>メイン: <span style={{ color: "var(--text)", fontSize: 16, fontWeight: 700 }}>{opt.main}</span></div>
-                      {opt.note && <div style={{ fontSize: 10, color: "var(--text-dim)" }}>補足: <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{opt.note}</span></div>}
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>上段: <span style={{ color: "var(--text)", fontSize: 12 }}>{opt?.intro}</span></div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>大フック: <span style={{ color: "var(--text)", fontSize: 18, fontWeight: 700 }}>{opt?.hook}</span></div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>下段: <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{opt?.note}</span></div>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{opt?.text || ""}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>大タイトル: <span style={{ color: "var(--text)", fontSize: 15, fontWeight: 700 }}>{opt?.title}</span></div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>本文1: <span style={{ color: "var(--text)", fontSize: 12 }}>{opt?.body1}</span></div>
+                      <div style={{ fontSize: 10, color: "var(--text-dim)" }}>本文2: <span style={{ color: "var(--text-dim)", fontSize: 11 }}>{opt?.body2}</span></div>
+                    </div>
                   )}
                 </div>
               );
             })}
 
             {captions.length > 0 && (
-              <div style={{ borderLeft: "2px solid var(--border)", paddingLeft: 12, borderColor: "var(--accent)" }}>
+              <div style={{ borderLeft: "2px solid var(--accent)", paddingLeft: 12 }}>
                 <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.1em", marginBottom: 6 }}>キャプション</div>
                 <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{captions[selectedCaption]}</div>
               </div>
@@ -541,8 +574,11 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
             {slides.map((s, si) => (
               <Card key={si} style={{ padding: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, color: "var(--accent)", letterSpacing: "0.08em" }}>
-                    S{si + 1} — {s.role}
+                  <div>
+                    <div style={{ fontSize: 10, color: si === 3 ? "#98c379" : "var(--accent)", letterSpacing: "0.08em" }}>
+                      S{si + 1} — {s.role}
+                    </div>
+                    {si === 3 && <div style={{ fontSize: 9, color: "#98c379", marginTop: 2 }}>実商品写真を使用</div>}
                   </div>
                   <button onClick={() => copyText(optToText(s.options[s.selected]))} style={{
                     fontSize: 9, color: "var(--text-dim)", background: "none",
@@ -552,7 +588,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                   {s.options.map((opt, oi) => (
                     <SlideOptionCard key={oi} opt={opt} label={`案 ${oi + 1}`}
-                      selected={s.selected === oi} onClick={() => selectSlideOption(si, oi)} />
+                      isHook={s.type === "hook"} selected={s.selected === oi} onClick={() => selectSlideOption(si, oi)} />
                   ))}
                 </div>
               </Card>
@@ -587,6 +623,40 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
               <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.8 }}>{hashtags}</div>
             </Card>
           )}
+
+          {/* Image prompts for Gemini */}
+          <Card style={{ marginBottom: 12, borderLeft: "2px solid #56b6c2" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div>
+                <CardTitle style={{ marginBottom: 2 }}>画像生成プロンプト（Gemini用）</CardTitle>
+                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>S4のみ実商品写真を使用するためプロンプトなし</div>
+              </div>
+              <button onClick={() => copyText(buildImagePromptsText())} style={{
+                fontSize: 10, color: "#56b6c2", background: "none",
+                border: "1px solid #56b6c2", padding: "4px 10px", cursor: "pointer",
+              }}>一括コピー</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {slides.map((s, si) => {
+                const opt = s.options[s.selected];
+                if (!opt?.imagePrompt) return (
+                  <div key={si} style={{ padding: "8px 12px", background: "rgba(152,195,121,0.06)", border: "1px solid rgba(152,195,121,0.25)", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 9, color: "#98c379", border: "1px solid #98c379", padding: "1px 6px" }}>S{si + 1}</span>
+                    <span style={{ fontSize: 11, color: "#98c379" }}>実商品写真を使用（プロンプト不要）</span>
+                  </div>
+                );
+                return (
+                  <div key={si} style={{ padding: "10px 12px", background: "var(--bg2)", border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, color: "#56b6c2", letterSpacing: "0.08em" }}>【{si + 1}枚目 — {s.role}】</span>
+                      <button onClick={() => copyText(opt.imagePrompt)} style={{ fontSize: 9, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "2px 6px", cursor: "pointer" }}>コピー</button>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.7, fontFamily: "var(--font-mono)" }}>{opt.imagePrompt}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </>
       )}
 
