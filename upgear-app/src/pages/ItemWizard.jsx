@@ -179,7 +179,328 @@ function Step1({ urls, setUrls, onNext }) {
   );
 }
 
-// ─── Step 2: 商品理解（Playwright + Claude API） ──────────────────────────────
+// ─── 商品理解インポート: パーサー ────────────���────────────────────────────────
+
+const IMPORT_FIELDS = [
+  { key: "productName",       label: "商品名",                  multi: false },
+  { key: "brand",             label: "ブランド名",              multi: false },
+  { key: "category",         label: "商品カテゴリ",             multi: false },
+  { key: "purpose",          label: "何をする商品か",           multi: false },
+  { key: "targetProblem",    label: "誰のどんな悩みを解決するか", multi: true  },
+  { key: "features",         label: "主な機能",                 multi: true  },
+  { key: "strengths",        label: "強み",                    multi: true  },
+  { key: "weaknesses",       label: "弱み",                    multi: true  },
+  { key: "forWho",           label: "向い���いる人",            multi: false },
+  { key: "notForWho",        label: "向いていない人",          multi: true  },
+  { key: "competitors",      label: "競合商品",                multi: true  },
+  { key: "upgearEval",       label: "UPGEAR視点での評価",      multi: false },
+  { key: "tiktokAngles",     label: "TikTokで刺さる訴求",      multi: true  },
+  { key: "avoidExpressions", label: "投稿で避けるべき表現",    multi: true  },
+  { key: "catchphrase",      label: "一言でいうと",            multi: false },
+];
+
+const IMPORT_SECTION_PATTERNS = [
+  { key: "productName",       patterns: ["商品名", "製品名", "商品："] },
+  { key: "brand",             patterns: ["ブランド", "メーカー", "製造"] },
+  { key: "category",         patterns: ["商品カテゴリ", "カテゴリ", "商品種別", "種別"] },
+  { key: "purpose",          patterns: ["何をする商品", "商品概要", "概要", "用途", "何の商品", "商品説明"] },
+  { key: "targetProblem",    patterns: ["誰の��んな悩み", "ターゲット", "悩み解決", "どん���悩み", "課題", "解決する悩み"] },
+  { key: "features",         patterns: ["主な機能", "主要機能", "機能一覧", "機能", "特徴", "スペック"] },
+  { key: "strengths",        patterns: ["強み", "メリット", "よい点", "良い点", "優れた点"] },
+  { key: "weaknesses",       patterns: ["弱み", "デメリット", "注意点", "欠点", "弱点", "課題点"] },
+  { key: "forWho",           patterns: ["向いている人", "向いてる人", "おすすめの人", "対象ユーザー", "こんな人に"] },
+  { key: "notForWho",        patterns: ["向いていない人", "向いてない人", "不向き", "対象外", "おすすめできない"] },
+  { key: "competitors",      patterns: ["競合商品", "競合", "類似商品", "競合製品", "比���"] },
+  { key: "upgearEval",       patterns: ["upgear", "アップギア", "upgear視点", "upgear評価", "upGear", "UpGear"] },
+  { key: "tiktokAngles",     patterns: ["tiktok", "ティックトック", "tikTok", "訴求", "刺さる", "sns切り口"] },
+  { key: "avoidExpressions", patterns: ["避けるべき", "禁止", "使わない", "ng表現", "避けたい", "ng", "注意ワード"] },
+  { key: "catchphrase",      patterns: ["一言でいうと", "キャッチコピー", "まとめると", "結論", "一文でいうと"] },
+];
+
+function parseImportText(raw) {
+  const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+  const parsed = {};
+  let currentKey = null;
+  let currentLines = [];
+
+  const flush = () => {
+    if (currentKey && currentLines.length > 0) {
+      parsed[currentKey] = currentLines.join("\n").trim();
+    }
+  };
+
+  const normalize = s => s.toLowerCase().replace(/[\s:：・「」【】#▶●■▼◆◇→\-\d\.]/g, "");
+
+  for (const line of lines) {
+    const normLine = normalize(line);
+    let matched = null;
+
+    for (const sec of IMPORT_SECTION_PATTERNS) {
+      if (sec.patterns.some(p => normLine.includes(normalize(p)))) {
+        // Treat as header only if line is short or has common header markers
+        const isHeader =
+          line.length < 45 ||
+          /[:：]/.test(line.slice(0, 20)) ||
+          /^[#■▶●◆◇▼【]/.test(line) ||
+          /^\d+[\.\)]/.test(line);
+        if (isHeader) { matched = sec.key; break; }
+      }
+    }
+
+    if (matched) {
+      flush();
+      currentKey = matched;
+      currentLines = [];
+      // Capture inline content after colon
+      const ci = Math.max(line.lastIndexOf("���"), line.lastIndexOf(":"));
+      if (ci !== -1 && ci < line.length - 1) {
+        const inline = line.slice(ci + 1).trim();
+        if (inline && inline.length > 1) currentLines.push(inline);
+      }
+    } else if (currentKey) {
+      if (!/^[-=─━＝]{3,}$/.test(line)) currentLines.push(line);
+    }
+  }
+  flush();
+  return parsed;
+}
+
+function buildCardFromImport(parsed, existingLabel) {
+  const NA = "要確認";
+  const g = k => (parsed[k] && parsed[k].trim()) ? parsed[k].trim() : NA;
+  const gList = k => {
+    const v = parsed[k];
+    if (!v || !v.trim()) return [NA];
+    return v.split(/\n|[・、,，]/).map(s => s.replace(/^[-・\d\.]\s*/, "").trim()).filter(Boolean);
+  };
+
+  const category = g("category");
+  const name = g("productName") !== NA ? g("productName") : (existingLabel || NA);
+
+  return {
+    // 基本
+    name,
+    brand:        g("brand"),
+    category:     category !== NA ? category : "",
+    mainCategory: category !== NA ? category : "ガジェ��ト",
+    subCategory:  "",
+    productType:  g("catchphrase"),
+    priceRange:   "",
+
+    // UpGear思想フィールド
+    judgmentReducer:       g("purpose"),
+    whatIsThis:            g("purpose"),
+    whatItSolves:          g("targetProblem"),
+    forWho:                g("forWho"),
+    notForWho:             gList("notForWho"),
+    strengths:             gList("strengths"),
+    weaknesses:            gList("weaknesses"),
+    dailyFrictionReduced:  gList("targetProblem"),
+    continuityReason:      "",
+    vsAlternatives:        g("competitors"),
+    tiktokAngles:          gList("tiktokAngles"),
+    avoidExpressions:      gList("avoidExpressions"),
+    useScenes:             [],
+
+    // 評価
+    verdict:      "要確認",
+    verdictReason: g("upgearEval"),
+    upgearScore:  70,
+
+    // カテゴリ信頼度
+    categoryConfidence: category !== NA ? 85 : 40,
+    categorySource:     "インポート（ChatGPT）",
+    categoryChain:      category !== NA ? [category] : [],
+    categoryCandidates: [],
+
+    // 商品理解サマリー
+    summary: {
+      productName:    name,
+      brand:          g("brand"),
+      category:       category,
+      purpose:        g("purpose"),
+      mainFeatures:   gList("features"),
+      targetUser:     g("forWho"),
+      priceRange:     "",
+      reviewSummary:  NA,
+      complaints:     gList("weaknesses"),
+      upgearValue:    g("upgearEval"),
+      misjudgmentRisk: NA,
+      confidence:     75,
+    },
+
+    // レビュー（インポート時は空）
+    reviewData: { avg: null, count: null, highEval: [], lowEval: [], longTerm: "", positive: [], negative: [] },
+
+    // メタ
+    searchKeywords:  [],
+    dataQuality:     "imported",
+    dataQualityNote: "ChatGPTイン��ートデータ",
+    inferenceMethod: "手動インポート（ChatGPT）",
+    visionUsed:      false,
+    rakuten:         null,
+    fetchSources:    [],
+    rawBreadcrumbs:  [],
+    rawCategory:     [],
+
+    understandingScore: 75,
+    missingFields:      [],
+
+    importedFrom: "chatgpt",
+    importedAt:   Date.now(),
+  };
+}
+
+// ─── Step 2 Import Mode ─────────��──────────────────────────────────────────────
+
+function Step2Import({ item, onComplete, onSwitchAuto }) {
+  const [text, setText] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [parseError, setParseError] = useState("");
+
+  const handleParse = () => {
+    if (!text.trim()) { setParseError("テキストを貼り付けてください"); return; }
+    setParseError("");
+    const p = parseImportText(text);
+    const detectedCount = Object.keys(p).length;
+    if (detectedCount === 0) {
+      setParseError("セクションを検出できませんでした。「商品カテゴリ：」「強み：」など見出しを含む形式を貼り付けてください。");
+      return;
+    }
+    setParsed(p);
+    const card = buildCardFromImport(p, item?.label);
+    // build editable draft: all 15 fields as strings
+    const d = {};
+    for (const f of IMPORT_FIELDS) {
+      d[f.key] = p[f.key] || "";
+    }
+    setDraft(d);
+  };
+
+  const handleComplete = () => {
+    const merged = { ...parsed, ...draft };
+    const card = buildCardFromImport(merged, item?.label);
+    onComplete(card);
+  };
+
+  const setField = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
+
+  const detectedCount = parsed ? Object.values(parsed).filter(v => v && v.trim()).length : 0;
+
+  const taBase = {
+    width: "100%", background: "var(--bg)", border: "1px solid var(--border)",
+    color: "var(--text)", fontFamily: "var(--font-mono)", fontSize: 11,
+    padding: "6px 10px", resize: "vertical", boxSizing: "border-box",
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>商品理解インポート</h2>
+          <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
+            ChatGPTで作成した商品理解テキストを貼り付けて、商品カルテに変換します
+          </p>
+        </div>
+        <button onClick={onSwitchAuto} style={{ fontSize: 10, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "4px 12px", cursor: "pointer" }}>
+          ← 自動解析に切り替え
+        </button>
+      </div>
+
+      {/* Paste area */}
+      {!draft && (
+        <div>
+          <div style={{ fontSize: 10, color: "var(--text-dim)", marginBottom: 6, letterSpacing: "0.1em" }}>
+            ChatGPT出力テキストを貼り付け — 「商���カテゴリ：」「強み：」などの見出しが含まれていれば自動認識します
+          </div>
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder={"例:\n商品カテ���リ：ワイヤレスイヤホン\n何をする商品か：外音遮断とANC機能により、通勤・在宅の集中環境をワンタップで作れる\n強み：\n・業界最高水準のANC性能\n・30時間のバッテリー\n...\n"}
+            style={{ ...taBase, minHeight: 260, marginBottom: 12, fontSize: 12, lineHeight: 1.6 }}
+          />
+          {parseError && (
+            <div style={{ fontSize: 11, color: "#e06c75", marginBottom: 10 }}>{parseError}</div>
+          )}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              onClick={handleParse}
+              disabled={!text.trim()}
+              style={{
+                background: text.trim() ? "var(--accent)" : "var(--bg2)",
+                color: text.trim() ? "#1e2127" : "var(--text-dim)",
+                border: "none", padding: "10px 28px", fontSize: 13,
+                fontWeight: 700, cursor: text.trim() ? "pointer" : "not-allowed",
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              読み込む →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Editable fields after parse */}
+      {draft && (
+        <div>
+          <div style={{ background: "rgba(152,195,121,0.08)", border: "1px solid rgba(152,195,121,0.3)", padding: "10px 14px", marginBottom: 16, fontSize: 11 }}>
+            <span style={{ color: "#98c379", fontWeight: 700 }}>✓ {detectedCount}項目を検出</span>
+            <span style={{ color: "var(--text-dim)", marginLeft: 12 }}>
+              「要確認」の項目を手動で編集してください
+            </span>
+            <button onClick={() => { setParsed(null); setDraft(null); }} style={{ float: "right", fontSize: 10, color: "var(--text-dim)", background: "none", border: "1px solid var(--border)", padding: "1px 8px", cursor: "pointer" }}>
+              貼り直す
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+            {IMPORT_FIELDS.map(f => {
+              const val = draft[f.key] || "";
+              const isEmpty = !val.trim();
+              const isNA = val.trim() === "要確認";
+              return (
+                <div key={f.key} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ width: 150, flexShrink: 0, paddingTop: 7 }}>
+                    <div style={{ fontSize: 10, color: isEmpty || isNA ? "#e06c75" : "var(--text-dim)" }}>
+                      {isEmpty || isNA ? "⚠ " : "✓ "}{f.label}
+                    </div>
+                  </div>
+                  <textarea
+                    value={val}
+                    onChange={e => setField(f.key, e.target.value)}
+                    rows={f.multi ? 3 : 1}
+                    style={{
+                      ...taBase,
+                      borderColor: isEmpty || isNA ? "rgba(224,108,117,0.4)" : "var(--border)",
+                      minHeight: f.multi ? 56 : 30,
+                    }}
+                    placeholder={`${f.label}を入力（空欄可）`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              保存後に台本作成・ReadyAI反映まで使用できます
+            </div>
+            <button
+              onClick={handleComplete}
+              style={{ background: "var(--accent)", color: "#1e2127", border: "none", padding: "10px 28px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "var(--font-mono)" }}
+            >
+              確認画面へ →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ──��� Step 2: 商品理解（Playwright + Claude API） ──────────────────────────────
 
 const REAL_STAGES = [
   { id: "init",    label: "URL解析・準備" },
@@ -285,6 +606,16 @@ function DebugPanel({ debug, categoryInfo, visible }) {
 }
 
 function Step2({ urls, item, onComplete, onBack }) {
+  const [mode, setMode] = useState("auto"); // "auto" | "import"
+
+  if (mode === "import") {
+    return <Step2Import item={item} onComplete={onComplete} onSwitchAuto={() => setMode("auto")} />;
+  }
+
+  return <Step2Auto urls={urls} item={item} onComplete={onComplete} onBack={onBack} onSwitchImport={() => setMode("import")} />;
+}
+
+function Step2Auto({ urls, item, onComplete, onBack, onSwitchImport }) {
   const [stageStatus, setStageStatus] = useState({});
   const [progressLog, setProgressLog] = useState([]);
   const [done, setDone] = useState(false);
@@ -419,6 +750,14 @@ function Step2({ urls, item, onComplete, onBack }) {
           }}>
             {showDebug ? "DEBUG ▲" : "DEBUG ▼"}
           </button>
+          {!done && (
+            <button onClick={onSwitchImport} style={{
+              fontSize: 9, color: "var(--accent)", background: "none",
+              border: "1px solid var(--accent)", padding: "2px 10px", cursor: "pointer",
+            }}>
+              テキストインポートに切替
+            </button>
+          )}
         </div>
       </div>
 
