@@ -197,6 +197,17 @@ const IMPORT_FIELDS = [
   { key: "tiktokAngles",     label: "TikTokで刺さる訴求",      multi: true  },
   { key: "avoidExpressions", label: "投稿で避けるべき表現",    multi: true  },
   { key: "catchphrase",      label: "一言でいうと",            multi: false },
+  // レビュー分析
+  { key: "rakutenReview",    label: "楽天レビュー要約",        multi: false },
+  { key: "amazonReview",     label: "Amazonレビュー要約",      multi: false },
+  { key: "positiveReviews",  label: "高評価で多い意見",        multi: true  },
+  { key: "negativeReviews",  label: "低評価で多い意見",        multi: true  },
+  { key: "reviewSummary",    label: "レビュー総評",            multi: false },
+  // 市場分析
+  { key: "tiktokTrends",     label: "TikTokで伸びている訴求",  multi: true  },
+  { key: "tiktokPattern",    label: "TikTok投稿傾向",          multi: false },
+  { key: "differentiation",  label: "差別化ポイント",          multi: false },
+  { key: "marketPosition",   label: "市場での立ち位置",        multi: false },
 ];
 
 const IMPORT_SECTION_PATTERNS = [
@@ -215,6 +226,17 @@ const IMPORT_SECTION_PATTERNS = [
   { key: "tiktokAngles",     patterns: ["tiktok", "ティックトック", "tikTok", "訴求", "刺さる", "sns切り口"] },
   { key: "avoidExpressions", patterns: ["避けるべき", "禁止", "使わない", "ng表現", "避けたい", "ng", "注意ワード"] },
   { key: "catchphrase",      patterns: ["一言でいうと", "キャッチコピー", "まとめると", "結論", "一文でいうと"] },
+  // レビュー分析
+  { key: "rakutenReview",    patterns: ["楽天レビュー要約", "楽天レビュー", "楽天口コミ"] },
+  { key: "amazonReview",     patterns: ["amazonレビュー要約", "amazonレビュー", "amazon口コミ", "アマゾンレビュー"] },
+  { key: "positiveReviews",  patterns: ["高評価で多い意見", "高評価", "好評", "よかった点", "満足点"] },
+  { key: "negativeReviews",  patterns: ["低評価で多い意見", "低評価", "不満", "悪かった点", "改善点"] },
+  { key: "reviewSummary",    patterns: ["レビュー総評", "口コミ総評", "レビューまとめ", "総合評価"] },
+  // 市場分析
+  { key: "tiktokTrends",     patterns: ["tiktokで伸びている", "tiktok訴求", "伸びている訴求", "バズ訴求"] },
+  { key: "tiktokPattern",    patterns: ["tiktok投稿傾向", "投稿傾向", "投稿パターン", "人気の投稿"] },
+  { key: "differentiation",  patterns: ["差別化ポイント", "差別化", "独自性", "他商品との違い"] },
+  { key: "marketPosition",   patterns: ["市場での立ち位置", "市場ポジション", "市場位置", "競合との比較"] },
 ];
 
 function parseImportText(raw) {
@@ -329,8 +351,28 @@ function buildCardFromImport(parsed, existingLabel) {
       confidence:     75,
     },
 
-    // レビュー（インポート時は空）
-    reviewData: { avg: null, count: null, highEval: [], lowEval: [], longTerm: "", positive: [], negative: [] },
+    // レビュー（インポート）
+    reviewData: {
+      avg: null, count: null,
+      highEval: gList("positiveReviews"),
+      lowEval:  gList("negativeReviews"),
+      longTerm: "",
+      positive: gList("positiveReviews"),
+      negative: gList("negativeReviews"),
+    },
+
+    // 商品理解追加フィールド（ProductUnderstandingページ用）
+    understanding: {
+      rakutenReview:   g("rakutenReview"),
+      amazonReview:    g("amazonReview"),
+      positiveReviews: g("positiveReviews"),
+      negativeReviews: g("negativeReviews"),
+      reviewSummary:   g("reviewSummary"),
+      tiktokTrends:    g("tiktokTrends"),
+      tiktokPattern:   g("tiktokPattern"),
+      differentiation: g("differentiation"),
+      marketPosition:  g("marketPosition"),
+    },
 
     // メタ
     searchKeywords:  [],
