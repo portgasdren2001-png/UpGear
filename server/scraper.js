@@ -160,7 +160,13 @@ let browserInstance = null;
 
 async function getBrowser() {
   if (browserInstance) return browserInstance;
-  const pwModule = await import('../upgear-app/node_modules/playwright-core/index.js');
+  // 1st: server's own playwright-core, 2nd: upgear-app fallback (legacy)
+  let pwModule;
+  try {
+    pwModule = await import('playwright-core');
+  } catch {
+    pwModule = await import('../upgear-app/node_modules/playwright-core/index.js');
+  }
   const { chromium } = pwModule.default ?? pwModule;
 
   const executablePath = await findChromiumExecutable(chromium);
