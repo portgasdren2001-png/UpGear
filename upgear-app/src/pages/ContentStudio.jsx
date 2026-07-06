@@ -10,6 +10,7 @@ import {
   scoreQuality,
   analyzePerformance,
   analyzeSNSPotential,
+  checkUnderstandingData,
   REGEN_MODES,
 } from "../data/contentAI";
 import { getTopRecommendations } from "../data/marketResearchAI";
@@ -157,6 +158,7 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   const [snsAnalysis, setSnsAnalysis] = useState(null);
   const [scriptView, setScriptView] = useState(false);
 
+  const [dataCheck, setDataCheck] = useState(null);
   const [analytics, setAnalytics] = useState({ views: "", likes: "", saves: "", comments: "", follows: "" });
   const [perfResult, setPerfResult] = useState(null);
 
@@ -165,7 +167,15 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
   /* ─── Apply research if coming from MarketResearch page ─── */
   /* ─── Actions ─── */
 
-  const doBuild = useCallback((hookOverride) => {
+  const doBuild = useCallback((hookOverride, forceSkipCheck) => {
+    // Data sufficiency check
+    const check = checkUnderstandingData(item);
+    if (!forceSkipCheck && check.requiredMissing.length > 0) {
+      setDataCheck(check);
+      setStep(4);
+      return;
+    }
+    setDataCheck(null);
     const hObj = hookOverride ?? selectedHook ?? { text: "" };
     const h = typeof hObj === "object" ? (hObj.text ?? "") : hObj;
     const fmt = selectedFormat ?? FORMATS[0].id;
@@ -298,6 +308,17 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
                     No.{it.no}　{displayName}
                   </div>
                   {hasU && <span style={{ fontSize: 9, color: "#98c379", flexShrink: 0 }}>◍ 理解済み</span>}
+                  {(() => {
+                    if (!hasU) return null;
+                    const chk = checkUnderstandingData(it);
+                    if (chk.requiredMissing.length > 0) return (
+                      <span style={{ fontSize: 9, color: "#e06c75", flexShrink: 0 }}>△ {chk.requiredMissing.length}項目不足</span>
+                    );
+                    if (chk.importantMissing.length > 0) return (
+                      <span style={{ fontSize: 9, color: "rgba(229,192,123,0.8)", flexShrink: 0 }}>◌ 推奨{chk.importantMissing.length}項目</span>
+                    );
+                    return <span style={{ fontSize: 9, color: "#98c379", flexShrink: 0 }}>✓ 充足</span>;
+                  })()}
                 </div>
                 {displayCat && <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 2 }}>{displayCat}</div>}
               </div>
@@ -486,8 +507,64 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
 
   /* ─── Step 4: Slides + Script + Analysis ─── */
 
-  const renderStep4 = () => (
+  const renderStep4 = () => {
+    const check = checkUnderstandingData(item);
+    return (
     <div>
+      {/* Data check warning */}
+      {(dataCheck || check.missing.length > 0) && (
+        <div style={{
+          marginBottom: 16,
+          border: `1px solid ${dataCheck ? "#e06c75" : "rgba(229,192,123,0.4)"}`,
+          background: dataCheck ? "rgba(224,108,117,0.06)" : "rgba(229,192,123,0.04)",
+        }}>
+          <div style={{ padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: dataCheck ? "#e06c75" : "rgba(229,192,123,0.9)" }}>
+              {dataCheck ? "必須データが不足しています — 生成前に商品理解を入力してください" : "データ不足の項目があります（任意）"}
+            </div>
+            {dataCheck && (
+              <button
+                onClick={() => doBuild(undefined, true)}
+                style={{ fontSize: 10, padding: "4px 12px", cursor: "pointer", background: "none", border: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
+              >
+                不足のまま生成する
+              </button>
+            )}
+          </div>
+          <div style={{ padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {check.missing.filter(f => f.level === "required").map(f => (
+              <span key={f.key} style={{ fontSize: 10, padding: "3px 10px", background: "rgba(224,108,117,0.12)", border: "1px solid #e06c75", color: "#e06c75" }}>
+                ✕ {f.label}（必須）
+              </span>
+            ))}
+            {check.missing.filter(f => f.level === "important").map(f => (
+              <span key={f.key} style={{ fontSize: 10, padding: "3px 10px", background: "rgba(229,192,123,0.08)", border: "1px solid rgba(229,192,123,0.5)", color: "rgba(229,192,123,0.9)" }}>
+                △ {f.label}（推奨）
+              </span>
+            ))}
+            {check.missing.filter(f => f.level === "recommended").map(f => (
+              <span key={f.key} style={{ fontSize: 10, padding: "3px 10px", background: "var(--bg2)", border: "1px solid var(--border)", color: "var(--text-dim)" }}>
+                ◌ {f.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Show data check with build button if required fields missing */}
+      {dataCheck && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--text-dim)" }}>
+          <div style={{ fontSize: 13, marginBottom: 16 }}>商品理解データを入力してから生成してください</div>
+          <button
+            onClick={() => doBuild(undefined, true)}
+            style={{ fontSize: 11, padding: "8px 20px", cursor: "pointer", background: "none", border: "1px solid var(--border)", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}
+          >
+            不足のまま生成する（[要確認]が入ります）
+          </button>
+        </div>
+      )}
+
+      {!dataCheck && <>
       {/* Top bar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 8 }}>
@@ -729,8 +806,10 @@ export default function ContentStudio({ data, selectedItemId: initItemId, setSel
           )}
         </Card>
       )}
+      </>}
     </div>
-  );
+    );
+  };
 
   /* ─── Step 5: Post analytics ─── */
 

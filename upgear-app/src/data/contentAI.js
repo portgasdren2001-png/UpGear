@@ -129,169 +129,302 @@ function buildImgPrompt(scene) {
   return IMG_BASE + " " + scene;
 }
 
-// New format helpers
+// ─── Understanding data helpers ───────────────────────────────────────────────
+
+// Extract first meaningful sentence/bullet from a multi-line field
+function firstLine(text, fallback) {
+  const f = fallback || "";
+  if (!text?.trim()) return f;
+  const cleaned = text.split(/\n/)[0].trim().replace(/^[-・◆▶\s]+/, "");
+  return cleaned || f;
+}
+
+// Extract up to n bullet points from multi-line field, cleaned of bullets
+function nLines(text, n) {
+  if (!text?.trim()) return [];
+  return text.split(/\n/)
+    .map(l => l.trim().replace(/^[-・◆▶✕✓\s]+/, ""))
+    .filter(Boolean)
+    .slice(0, n);
+}
+
+// Trim text to maxLen characters (word-safe for Japanese)
+function cut(text, maxLen) {
+  if (!text) return "";
+  return text.length <= maxLen ? text : text.slice(0, maxLen);
+}
+
+// ─── Data sufficiency check ───────────────────────────────────────────────────
+
+const CHECK_FIELDS = [
+  { key: "strengths",       label: "強み",              level: "required" },
+  { key: "weaknesses",      label: "弱み",              level: "required" },
+  { key: "notForWho",       label: "向いていない人",     level: "required" },
+  { key: "problemSolved",   label: "解決する悩み",       level: "required" },
+  { key: "positiveReviews", label: "高評価レビュー",     level: "important" },
+  { key: "negativeReviews", label: "低評価レビュー",     level: "important" },
+  { key: "oneLiner",        label: "一言まとめ",         level: "important" },
+  { key: "tiktokTrends",    label: "TikTokで伸びている訴求", level: "recommended" },
+  { key: "forWho",          label: "向いている人",       level: "recommended" },
+  { key: "buyReason",       label: "購入理由",           level: "recommended" },
+];
+
+export function checkUnderstandingData(item) {
+  const u = item?.understanding || {};
+  const missing = [];
+  const thin    = [];
+
+  for (const { key, label, level } of CHECK_FIELDS) {
+    const val = (u[key] || "").trim();
+    if (!val) {
+      missing.push({ key, label, level });
+    } else if (val.length < 10) {
+      thin.push({ key, label, level });
+    }
+  }
+
+  const requiredMissing  = missing.filter(f => f.level === "required");
+  const importantMissing = missing.filter(f => f.level === "important");
+  const ok = requiredMissing.length === 0;
+
+  return { ok, missing, thin, requiredMissing, importantMissing };
+}
+
+// ─── Slide Generation ─────────────────────────────────────────────────────────
+
 // S1: { intro, hook, note, imagePrompt }
 // S2-S6: { title, body1, body2, imagePrompt? }  ← S4 has no imagePrompt
 
 export function generateAllSlides(item, hook, format, mode) {
   return [
-    { role: "フック（1枚目）",      type: "hook", options: genS1(item, hook, mode) },
-    { role: "Before（2枚目）",      type: "text", options: genS2(item, mode) },
-    { role: "気付き・露見（3枚目）", type: "text", options: genS3(item, mode) },
-    { role: "商品・認定（4枚目）",  type: "text", options: genS4(item, mode) },
+    { role: "フック（1枚目）",       type: "hook", options: genS1(item, hook, mode) },
+    { role: "Before（2枚目）",       type: "text", options: genS2(item, mode) },
+    { role: "気付き・露見（3枚目）",  type: "text", options: genS3(item, mode) },
+    { role: "商品・認定（4枚目）",   type: "text", options: genS4(item, mode) },
     { role: "向いていない人（5枚目）", type: "text", options: genS5(item, mode) },
-    { role: "結論（6枚目）",         type: "text", options: genS6(item, mode) },
+    { role: "結論（6枚目）",          type: "text", options: genS6(item, mode) },
   ];
 }
 
+// ─── S1 フック ────────────────────────────────────────────────────────────────
+// 使用データ: tiktokTrends, hook(SNS用), strengths, tiktokAngles
+// 禁止: 「忙しい現代人」「幅広いシーンで」系汎用表現
+
 function genS1(item, hook, mode) {
+  const u    = item?.understanding || {};
   const cat  = getCatWord(item);
   const nick = getNick(item);
-  const tiktok = getItemField(item, "tiktokTrends") || "";
-  const theme  = tiktok.split(/[\n。]/)[0] || cat + "選び";
 
+  // Data-driven values
+  const trendRaw   = (u.tiktokTrends  || "").trim();
+  const hooksRaw   = (u.hook          || "").trim();
+  const strengthRaw= (u.strengths     || "").trim();
+  const anglesRaw  = (u.tiktokAngles  || "").trim();
+
+  const trend1  = firstLine(trendRaw,  "");
+  const hook1   = firstLine(hooksRaw,  "");
+  const hook2   = nLines(hooksRaw, 3)[1] || "";
+  const str1    = firstLine(strengthRaw, "");
+  const angle1  = firstLine(anglesRaw, "");
+
+  // Build options from real data; use [要確認] when data is missing
   const base = [
-    {
+    // Option 1: TikTokフックから直接生成
+    trend1 ? {
+      intro: nick + "について正直に言う",
+      hook:  cut(trend1, 20),
+      note:  str1 ? cut(str1, 24) + "。これだけは確か" : "使って気づいた差がある",
+      imagePrompt: buildImgPrompt("デスクで悩んでいる男性の後ろ姿、夜の部屋、モニターの光"),
+    } : {
       intro: cat + "で迷ってる人へ",
-      hook:  hook ? hook.split(/[\s　]+/).slice(0, 3).join("") : "まだ損してるかも",
-      note:  "1年使った俺が正直に言う",
-      imagePrompt: buildImgPrompt("デスクで悩んでいる男性の後ろ姿、画面を見つめている、夜の部屋"),
+      hook:  "俺が選んだ理由を話す",
+      note:  str1 ? cut(str1, 24) : "[強みデータを入力してください]",
+      imagePrompt: buildImgPrompt("デスクで悩んでいる男性の後ろ姿、夜の部屋、モニターの光"),
     },
-    {
+
+    // Option 2: SNS用フックから生成
+    hook1 ? {
       intro: "買う前に見て",
-      hook:  nick + "を買う前に確認しろ",
-      note:  "後悔するパターンがある",
+      hook:  cut(hook1, 22),
+      note:  hook2 ? cut(hook2, 24) : (str1 ? cut(str1, 24) : "後悔するパターンがある"),
+      imagePrompt: buildImgPrompt("スマートフォンで商品を検索している男性、テーブルにコーヒーカップ"),
+    } : {
+      intro: "買う前に見て",
+      hook:  nick + "を選ぶ前に確認しろ",
+      note:  "[投稿フックを入力するとここが具体的になります]",
       imagePrompt: buildImgPrompt("スマートフォンで商品を検索している男性、テーブルにコーヒーカップ"),
     },
-    {
+
+    // Option 3: 強み＋訴求角度から生成
+    (str1 && angle1) ? {
       intro: "正直に言う",
-      hook:  "元に戻れなくなった",
-      note:  theme.slice(0, 20) + "の話",
+      hook:  cut(angle1, 22),
+      note:  cut(str1, 26) + "。これが他と違う",
+      imagePrompt: buildImgPrompt("朝の準備をしながらアイテムに目をやる男性、玄関または洗面台"),
+    } : {
+      intro: "正直に言う",
+      hook:  str1 ? cut(str1, 20) + "から選んだ" : "元に戻れなくなった理由を話す",
+      note:  "使って体感した話をする",
       imagePrompt: buildImgPrompt("朝の準備をしながらアイテムに目をやる男性、玄関または洗面台"),
     },
+
+    // Option 4: hook外部引数（Step2で選択したフック）を活用
     {
-      intro: "知らないと損する",
-      hook:  cat + "選びの正解",
-      note:  "同じ失敗をしてほしくないから言う",
+      intro: cat + "選びで後悔した話",
+      hook:  hook ? cut(hook.split(/[\s　]+/).slice(0, 3).join(""), 22) : cut(nick, 16) + "の本音",
+      note:  "同じ選び方をする前に見て",
       imagePrompt: buildImgPrompt("窓際の明るい部屋でノートPCに向かう男性、集中した表情"),
     },
   ];
 
-  if (mode === "口語") return base.map(o => ({ ...o, note: o.note.replace(/ください/g, "").replace(/ます/g, "る") }));
-  if (mode === "短く") return base.map(o => ({ ...o, note: o.note.split("　")[0] }));
-  return base;
+  return applyModeToOptions(base, mode);
 }
 
+// ─── S2 Before ────────────────────────────────────────────────────────────────
+// 使用データ: problemSolved, buyingConcerns, weaknesses(競合)
+// 目的: ユーザーの「以前の状態」を商品固有の問題で描写
+
 function genS2(item, mode) {
+  const u   = item?.understanding || {};
   const cat = getCatWord(item);
-  const problemSolved = getItemField(item, "problemSolved") || "";
-  const firstProblem  = problemSolved.split(/[\n。]/)[0] || cat + "で小さなストレスがあった";
+
+  const prob1 = firstLine(u.problemSolved,  "");
+  const prob2 = nLines(u.problemSolved, 3)[1] || "";
+  const conc1 = firstLine(u.buyingConcerns, "");
+  const weak1 = firstLine(u.weaknesses,     "");
 
   const base = [
     {
-      title: "以前の俺の話",
-      body1:  firstProblem.slice(0, 40) || `普通の${cat}を使っていた`,
-      body2:  "それが当たり前だと思っていた",
+      title: prob1 ? "その悩み、俺も持っていた" : "以前の俺の話",
+      body1: prob1 ? cut(prob1, 38) : `${cat}で毎日小さなストレスがあった`,
+      body2: prob2 ? cut(prob2, 36) : "でも慣れていた。それが問題だった",
       imagePrompt: buildImgPrompt("古いアイテムや不便そうな状況、少し疲れた表情の男性、雑然としたデスク"),
     },
     {
-      title: "毎日の小さなストレス",
-      body1:  `${cat}を使うたびに感じていた違和感`,
-      body2:  "でも慣れていた。それが問題だった",
-      imagePrompt: buildImgPrompt("ため息をつく男性、デスクで頬杖をつく、夕方の薄暗い部屋"),
+      title: conc1 ? "買う前の不安" : "選べなかった理由",
+      body1: conc1 ? cut(conc1, 38) : `${cat}の情報が多すぎて判断できなかった`,
+      body2: "でも使ってから答えが出た",
+      imagePrompt: buildImgPrompt("スマートフォンやPCで複数の商品を見比べている男性、迷い顔"),
     },
     {
-      title: "選べなかった理由",
-      body1:  `${cat}の情報が多すぎて判断できなかった`,
-      body2:  "何を基準に選べばいいか分からなかった",
-      imagePrompt: buildImgPrompt("スマートフォンやPCで複数の商品を見比べている男性、迷い顔"),
+      title: "変える前はこうだった",
+      body1: prob1 ? cut(prob1, 38) : `普通の${cat}で間に合わせていた`,
+      body2: weak1 ? `弱点も知った上で選んだ：${cut(weak1, 26)}` : "それが当たり前だと思っていた",
+      imagePrompt: buildImgPrompt("ため息をつく男性、デスクで頬杖をつく、夕方の薄暗い部屋"),
     },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
+// ─── S3 気付き・露見 ──────────────────────────────────────────────────────────
+// 使用データ: positiveReviews, reviewSummary, differentiation
+// 目的: 「使ってわかった。他とは違う」という転換点を具体的に描写
+
 function genS3(item, mode) {
-  const cat      = getCatWord(item);
-  const useScene = getItemField(item, "useScenes") || "";
-  const scene    = useScene.split(/[\n。]/)[0] || "ある日";
+  const u   = item?.understanding || {};
+  const cat = getCatWord(item);
+
+  const pos1  = firstLine(u.positiveReviews,  "");
+  const pos2  = nLines(u.positiveReviews, 3)[1] || "";
+  const rev   = firstLine(u.reviewSummary,    "");
+  const diff  = firstLine(u.differentiation,  "");
 
   const base = [
     {
-      title: scene.slice(0, 20) || "あの日に気づいた",
-      body1:  "元に戻ったとき分かった",
-      body2:  "俺の中の当たり前が変わっていた",
+      title: pos1 ? cut(pos1, 22) : "使って3日で分かった",
+      body1: pos1 ? `口コミ：${cut(pos1, 32)}` : "気づいたら毎日使っていた",
+      body2: diff ? `他との違い：${cut(diff, 28)}` : "俺の中の当たり前が変わっていた",
       imagePrompt: buildImgPrompt("気づきの瞬間、男性が立ち止まってアイテムを見つめる、廊下または外出中"),
     },
     {
-      title: "1週間後",
-      body1:  "気づいたら毎日使っていた",
-      body2:  "それだけで答えは出ていた",
-      imagePrompt: buildImgPrompt("朝の習慣として自然にアイテムを使っている男性、ルーティン感のある構図"),
+      title: diff ? cut(diff, 22) : "使って気づいた差",
+      body1: diff ? cut(diff, 38) : `以前の${cat}に戻れなくなっていた`,
+      body2: rev  ? cut(rev,  36) : "体感で分かる。これが本物",
+      imagePrompt: buildImgPrompt("比べるように両手にアイテムを持っている男性、以前と今を対比する構図"),
     },
     {
-      title: "使って3日で分かった",
-      body1:  `以前の${cat}に戻れなくなっていた`,
-      body2:  "体感で変化が分かる。これが本物",
-      imagePrompt: buildImgPrompt("比べるように両手にアイテムを持っている男性、以前と今を対比する構図"),
+      title: rev  ? cut(rev, 22)  : "レビューで確信した",
+      body1: pos1 ? cut(pos1, 38) : "使っている人の声が正直だった",
+      body2: pos2 ? cut(pos2, 36) : "俺の体感と一致していた",
+      imagePrompt: buildImgPrompt("朝の習慣として自然にアイテムを使っている男性、ルーティン感のある構図"),
     },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
+// ─── S4 商品・認定 ────────────────────────────────────────────────────────────
+// 使用データ: oneLiner, totalScore, evalReason, strengths
+// 目的: 商品固有の評価軸で認定を出す。汎用テンプレ禁止。
+
 function genS4(item, mode) {
-  const nick    = getNick(item);
-  const score   = getItemField(item, "totalScore") || item?.score || "";
-  const oneLiner= getItemField(item, "oneLiner") || "使って初めて分かる良さがある";
-  const strengths= getItemField(item, "strengths") || "";
-  const firstStr = strengths.split(/[\n。]/)[0] || "毎日使うほど価値が上がる";
-  const scoreText= score ? `UPGEAR認定 ${score}点` : "UPGEAR認定";
+  const u      = item?.understanding || {};
+  const nick   = getNick(item);
+  const score  = (u.totalScore || item?.score || "").toString().replace(/[^0-9]/g, "");
+  const scoreText = score ? `UPGEAR認定 ${score}点` : "UPGEAR認定";
+
+  const oneLiner  = (u.oneLiner   || "").trim();
+  const evalReason= firstLine(u.evalReason, "");
+  const str1      = firstLine(u.strengths,  "");
+  const str2      = nLines(u.strengths, 3)[1] || "";
 
   // S4 has no imagePrompt (actual product photo is used)
   const base = [
     {
       title: scoreText,
-      body1:  nick + "　" + oneLiner.slice(0, 30),
-      body2:  firstStr.slice(0, 40),
+      body1: oneLiner   ? cut(oneLiner,    38) : `${nick}の総評`,
+      body2: evalReason ? cut(evalReason,  36) : (str1 ? cut(str1, 36) : "[評価理由を入力してください]"),
     },
     {
       title: nick + "　" + scoreText,
-      body1:  oneLiner.slice(0, 40),
-      body2:  "毎日使う人には絶対に元が取れる",
+      body1: str1       ? cut(str1, 38) : (oneLiner ? cut(oneLiner, 38) : "[強みを入力してください]"),
+      body2: str2       ? cut(str2, 36) : "向いている人には刺さる",
     },
     {
       title: scoreText,
-      body1:  "正直に言う。これは良かった",
-      body2:  firstStr.slice(0, 40) || "毎日使うものだから妥協しなかった",
+      body1: oneLiner   ? cut(oneLiner,    38) : "[一言まとめを入力してください]",
+      body2: str1       ? `理由：${cut(str1, 30)}` : (evalReason ? cut(evalReason, 36) : ""),
     },
   ];
 
   return applyModeToOptions(base, mode);
 }
 
+// ─── S5 向いていない人 ────────────────────────────────────────────────────────
+// 使用データ: notForWho, weaknesses, negativeReviews
+// 目的: 具体的なNG条件。「こだわりが強い人」のような汎用NG禁止。
+
 function genS5(item, mode) {
-  const cat    = getCatWord(item);
-  const notFor = getItemField(item, "notForWho") || "";
-  const first  = notFor.split(/[\n。]/)[0] || "使用頻度が低い人";
+  const u    = item?.understanding || {};
+  const cat  = getCatWord(item);
+
+  const notFor  = nLines(u.notForWho,       3);
+  const weak    = nLines(u.weaknesses,      3);
+  const negRev  = firstLine(u.negativeReviews, "");
+
+  const nf1 = notFor[0] || "";
+  const nf2 = notFor[1] || "";
+  const wk1 = weak[0]   || "";
+  const wk2 = weak[1]   || "";
 
   const base = [
     {
       title: "向いていない人を先に言う",
-      body1:  first.slice(0, 40) || `${cat}を毎日使わない人`,
-      body2:  "2つ当てはまるなら別を選べ",
-      imagePrompt: buildImgPrompt("考え込む男性、腕を組んで目を細めている、シンプルな背景"),
-    },
-    {
-      title: "これが当てはまるなら不要",
-      body1:  `✕ ${cat}へのこだわりが強い人`,
-      body2:  "✕ とにかく安さだけ優先する人",
+      body1: nf1 ? `✕ ${cut(nf1, 30)}` : `✕ ${cat}を毎日使わない人 [要確認]`,
+      body2: nf2 ? `✕ ${cut(nf2, 30)}` : "2つ当てはまるなら別を選べ",
       imagePrompt: buildImgPrompt("手を横に振る男性、断るジェスチャー、ミニマルな室内"),
     },
     {
+      title: "弱点もある。正直に言う",
+      body1: wk1 ? `弱点：${cut(wk1, 34)}` : (nf1 ? `✕ ${cut(nf1, 34)}` : "[弱みを入力してください]"),
+      body2: negRev ? `レビュー傾向：${cut(negRev, 28)}` : (wk2 ? `弱点：${cut(wk2, 32)}` : "それでも選ぶ理由が必要な人向け"),
+      imagePrompt: buildImgPrompt("考え込む男性、腕を組んで目を細めている、シンプルな背景"),
+    },
+    {
       title: "買う前に確認",
-      body1:  "毎日使えるか　長期で使えるか",
-      body2:  "クリアできる人だけ買え",
+      body1: nf1 ? `これが当てはまる人は不要：${cut(nf1, 24)}` : "[向いていない人を入力してください]",
+      body2: wk1 ? `弱点を許容できるか：${cut(wk1, 24)}` : "クリアできる人だけ買え",
       imagePrompt: buildImgPrompt("チェックリストを見ている男性、メモや手帳、真剣な表情"),
     },
   ];
@@ -299,28 +432,36 @@ function genS5(item, mode) {
   return applyModeToOptions(base, mode);
 }
 
+// ─── S6 結論 ──────────────────────────────────────────────────────────────────
+// 使用データ: forWho, buyReason, tiktokAngles, oneLiner
+// 目的: 商品ごとの「誰が買うべきか」を具体的に締める
+
 function genS6(item, mode) {
-  const cat     = getCatWord(item);
-  const hook    = getItemField(item, "hook") || "";
-  const firstHook = hook.split(/[\n。]/)[0] || cat + "で迷わなくなる";
+  const u    = item?.understanding || {};
+  const cat  = getCatWord(item);
+
+  const forWho    = firstLine(u.forWho,       "");
+  const buyReason = firstLine(u.buyReason,    "");
+  const angle1    = firstLine(u.tiktokAngles, "");
+  const oneLiner  = (u.oneLiner || "").trim();
 
   const base = [
     {
-      title: "俺の結論",
-      body1:  `毎日使える${cat}だけを選べ`,
-      body2:  "保存してプロフィールから次の装備も確認して",
+      title: forWho ? cut(forWho, 22) + "だけ買え" : "俺の結論",
+      body1: buyReason ? cut(buyReason, 38) : `毎日使える${cat}を選べ`,
+      body2: "保存してプロフィールから次の装備も確認して",
       imagePrompt: buildImgPrompt("決断した表情の男性、清潔感のある装備を身に着けて出かける朝のシーン"),
     },
     {
-      title: cat + "で迷う時間が一番もったいない",
-      body1:  "答えは決まっている",
-      body2:  "フォローして次の投稿も見て",
+      title: oneLiner ? cut(oneLiner, 22) : cat + "選びの答え",
+      body1: buyReason ? cut(buyReason, 38) : "答えは決まっている",
+      body2: "フォローして次の投稿も見て",
       imagePrompt: buildImgPrompt("颯爽と歩く男性の後ろ姿、朝の通勤路、すっきりした印象"),
     },
     {
-      title: firstHook.slice(0, 24) || "装備を整えたら人生が変わった",
-      body1:  "体験した人間が言うから信じていい",
-      body2:  "保存して次の装備はプロフィールから",
+      title: angle1 ? cut(angle1, 22) : "装備を決めたら次へいける",
+      body1: forWho    ? `向いている人：${cut(forWho, 28)}` : "体験した人間が言うから信じていい",
+      body2: "保存して次の装備はプロフィールから",
       imagePrompt: buildImgPrompt("整理されたデスクで満足そうにコーヒーを飲む男性、穏やかな表情"),
     },
   ];
@@ -342,7 +483,6 @@ function applyModeToOptions(options, mode) {
       if (mode === "テンポ")  s = s.replace(/、/g, "。").split("。").filter(Boolean).slice(0, 2).join("。") + "。";
       return s;
     };
-    // Apply mode to text fields depending on slide type
     if (o.hook !== undefined) {
       return { ...o, hook: apply(o.hook), note: apply(o.note) };
     } else {
@@ -549,6 +689,7 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
   const [buzz, save, follow] = recommendations;
   if (!buzz || !save || !follow) return generateAllSlides(item, "", FORMATS[0].id, mode);
 
+  const u    = item?.understanding || {};
   const cat  = getCatWord(item);
   const nick = getNick(item);
 
@@ -577,51 +718,58 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
     },
   ];
 
-  // S2 before: { title, body1, body2, imagePrompt }
+  // S2 before — understanding data driven
+  const prob1 = firstLine(u.problemSolved,  "");
+  const prob2 = nLines(u.problemSolved, 3)[1] || "";
+  const conc1 = firstLine(u.buyingConcerns, "");
+  const weak1 = firstLine(u.weaknesses,     "");
   const s2 = applyModeToOptions([
     {
       archetype: buzz.archetype, archetypeColor: buzz.color,
-      title: "以前の俺の話",
-      body1: "普通の" + cat + "で毎日消耗していた",
-      body2: "それが当たり前だと思っていた",
+      title: prob1 ? "その悩み、俺も持っていた" : "以前の俺の話",
+      body1: prob1 ? cut(prob1, 38) : `普通の${cat}で毎日消耗していた`,
+      body2: prob2 ? cut(prob2, 36) : "それが当たり前だと思っていた",
       imagePrompt: buildImgPrompt("古いアイテムや不便そうな状況、少し疲れた表情の男性"),
     },
     {
       archetype: save.archetype, archetypeColor: save.color,
-      title: "選べなかった理由",
-      body1: cat + "の情報が多すぎて判断できなかった",
-      body2: "何を基準に選べばいいか分からなかった",
+      title: conc1 ? "買う前の不安" : "選べなかった理由",
+      body1: conc1 ? cut(conc1, 38) : `${cat}の情報が多すぎて判断できなかった`,
+      body2: "でも使ってから答えが出た",
       imagePrompt: buildImgPrompt("複数の商品を見比べている男性、迷い顔、スマートフォン"),
     },
     {
       archetype: follow.archetype, archetypeColor: follow.color,
-      title: "最初は半信半疑だった",
-      body1: "普通の" + cat + "から変える理由が見つからなかった",
-      body2: "でも使ってから気が変わった",
+      title: "変える前はこうだった",
+      body1: prob1 ? cut(prob1, 38) : `普通の${cat}から変える理由が見つからなかった`,
+      body2: weak1 ? `弱点も知った上で選んだ：${cut(weak1, 24)}` : "でも使ってから気が変わった",
       imagePrompt: buildImgPrompt("ため息をつく男性、デスクで頬杖をつく、夕方の薄暗い部屋"),
     },
   ], mode);
 
-  // S3 露見: { title, body1, body2, imagePrompt }
+  // S3 露見 — understanding data driven
+  const pos1  = firstLine(u.positiveReviews, "");
+  const diff1 = firstLine(u.differentiation, "");
+  const rev1  = firstLine(u.reviewSummary,   "");
   const s3 = applyModeToOptions([
     {
       archetype: buzz.archetype, archetypeColor: buzz.color,
-      title: "1週間後",
-      body1: "元に戻れなくなっていた",
-      body2: "当たり前が変わっていた",
+      title: diff1 ? cut(diff1, 22) : "1週間後",
+      body1: diff1 ? cut(diff1, 38) : "元に戻れなくなっていた",
+      body2: rev1  ? cut(rev1,  36) : "当たり前が変わっていた",
       imagePrompt: buildImgPrompt("朝の習慣として自然にアイテムを使っている男性、ルーティン感"),
     },
     {
       archetype: save.archetype, archetypeColor: save.color,
-      title: "使い始めて気づいた",
-      body1: "3つのポイントで全ての問題が解決していた",
-      body2: "もっと早く知りたかった",
+      title: pos1  ? cut(pos1, 22) : "使い始めて気づいた",
+      body1: pos1  ? `口コミ：${cut(pos1, 32)}` : "3つのポイントで全ての問題が解決していた",
+      body2: diff1 ? `他との違い：${cut(diff1, 28)}` : "もっと早く知りたかった",
       imagePrompt: buildImgPrompt("気づきの瞬間、男性が立ち止まってアイテムを見つめる"),
     },
     {
       archetype: follow.archetype, archetypeColor: follow.color,
-      title: "使って3日",
-      body1: "気づいたら毎日使っていた",
+      title: rev1  ? cut(rev1, 22) : "使って3日",
+      body1: pos1  ? cut(pos1, 38) : "気づいたら毎日使っていた",
       body2: "体感で分かる。これが本物",
       imagePrompt: buildImgPrompt("比べるように両手にアイテムを持っている男性、対比の構図"),
     },
@@ -652,51 +800,61 @@ export function generateSlidesByArchetypes(item, recommendations, mode) {
     },
   ], mode);
 
-  // S5 向いていない人: { title, body1, body2, imagePrompt }
+  // S5 向いていない人 — understanding data driven
+  const notFor = nLines(u.notForWho,  3);
+  const weak   = nLines(u.weaknesses, 3);
+  const negRev = firstLine(u.negativeReviews, "");
+  const nf1 = notFor[0] || "";
+  const nf2 = notFor[1] || "";
+  const wk1 = weak[0]   || "";
   const s5 = applyModeToOptions([
     {
       archetype: buzz.archetype, archetypeColor: buzz.color,
       title: "向いていない人を先に言う",
-      body1: "こだわりが強すぎる人",
-      body2: "これが当てはまるなら別を選べ",
+      body1: nf1 ? `✕ ${cut(nf1, 30)}` : `✕ ${cat}を毎日使わない人 [要確認]`,
+      body2: nf2 ? `✕ ${cut(nf2, 30)}` : "2つ当てはまるなら別を選べ",
       imagePrompt: buildImgPrompt("手を横に振る男性、断るジェスチャー、ミニマルな室内"),
     },
     {
       archetype: save.archetype, archetypeColor: save.color,
-      title: "これが当てはまるなら不要",
-      body1: "✕ 使用頻度が低い人",
-      body2: "✕ とにかく安さ優先の人",
+      title: "弱点もある。正直に言う",
+      body1: wk1 ? `弱点：${cut(wk1, 34)}` : (nf1 ? `✕ ${cut(nf1, 34)}` : "[弱みを入力してください]"),
+      body2: negRev ? `レビュー傾向：${cut(negRev, 28)}` : "それでも選ぶ理由が必要な人向け",
       imagePrompt: buildImgPrompt("チェックリストを見ている男性、メモや手帳、真剣な表情"),
     },
     {
       archetype: follow.archetype, archetypeColor: follow.color,
-      title: "俺も最初は向いてないと思った",
-      body1: "でも使って変わった",
-      body2: "ただし頻度が低い人には不要",
+      title: "買う前に確認",
+      body1: nf1 ? `これが当てはまる人は不要：${cut(nf1, 22)}` : "[向いていない人を入力してください]",
+      body2: wk1 ? `弱点を許容できるか：${cut(wk1, 22)}` : "クリアできる人だけ買え",
       imagePrompt: buildImgPrompt("考え込む男性、腕を組んで目を細めている"),
     },
   ], mode);
 
-  // S6 結論: { title, body1, body2, imagePrompt }
+  // S6 結論 — understanding data driven
+  const forWho    = firstLine(u.forWho,       "");
+  const buyReason = firstLine(u.buyReason,    "");
+  const angle1    = firstLine(u.tiktokAngles, "");
+  const oneLiner6 = (u.oneLiner || "").trim();
   const s6 = applyModeToOptions([
     {
       archetype: buzz.archetype, archetypeColor: buzz.color,
-      title: "迷ってる時間が一番もったいない",
-      body1: buzz.theme.text.slice(0, 30),
+      title: forWho    ? cut(forWho, 20) + "だけ買え" : "迷ってる時間が一番もったいない",
+      body1: buyReason ? cut(buyReason, 38) : buzz.theme.text.slice(0, 30),
       body2: "フォローして次の装備も確認して",
       imagePrompt: buildImgPrompt("颯爽と歩く男性の後ろ姿、朝の通勤路"),
     },
     {
       archetype: save.archetype, archetypeColor: save.color,
-      title: cat + "で迷いたくない人だけ買え",
-      body1: "保存して次に使って",
+      title: oneLiner6 ? cut(oneLiner6, 22) : cat + "選びの答え",
+      body1: buyReason ? cut(buyReason, 38) : "保存して次に使って",
       body2: "リストはプロフィールから",
       imagePrompt: buildImgPrompt("整理されたデスクで満足そうにコーヒーを飲む男性"),
     },
     {
       archetype: follow.archetype, archetypeColor: follow.color,
-      title: "俺の結論",
-      body1: follow.theme.text.slice(0, 30),
+      title: angle1 ? cut(angle1, 22) : "俺の結論",
+      body1: forWho ? `向いている人：${cut(forWho, 28)}` : follow.theme.text.slice(0, 30),
       body2: "体験した人間が言うから信じていい",
       imagePrompt: buildImgPrompt("決断した表情の男性、清潔感ある装備で出かける朝のシーン"),
     },
