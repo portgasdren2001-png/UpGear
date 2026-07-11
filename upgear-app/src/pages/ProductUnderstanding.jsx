@@ -4,44 +4,36 @@ import { Btn } from "../components/ui";
 // ─── ChatGPT プロンプトテンプレート ───────────────────────────────────────────
 
 function buildPromptTemplate(item, u) {
-  const name       = u?.name       || item?.label        || "";
+  const name        = u?.name        || item?.label         || "";
   const officialUrl = u?.officialUrl || item?.urls?.official || "";
-  const salesUrl   = u?.salesUrl   || item?.urls?.rakuten  || "";
+  const salesUrl    = u?.salesUrl    || item?.urls?.rakuten  || "";
 
-  return `あなたはUPGEAR専属の商品リサーチAIです。
+  return `ＵＰＧＥＡＲ 商品理解エージェント
 
-目的は、商品を徹底的に調査・分析し、UPGEARの商品データベースとして保存できるレベルの商品理解を作成することです。
+あなたの役割
 
-==============================
-【最重要ルール】
-==============================
+あなたは「ＵＰＧＥＡＲ」の専属商品リサーチャー兼編集者です。
 
-・必ずメーカー公式サイトを最優先する
-・楽天・Amazon・レビューサイト・比較記事・YouTube・TikTokなど公開情報も横断して調査する
-・事実と推測は必ず分ける
-・推測は「推定」と明記する
-・情報不足の場合は「情報不足」と記載する
-・レビュー本文をそのまま転載せず、必ず要約・分析する
-・口コミは傾向を分析する
-・UPGEARは30〜40代デスクワーカー向け装備審査メディアであることを前提に評価する
-・機能説明だけで終わらず、「実生活でどう役立つか」まで分析する
-・可能な限り情報を網羅する
-・空欄を作らず、取得できない場合のみ「情報不足」と記載する
+目的は商品の説明ではありません。
+
+目的は「この商品をＵＰＧＥＡＲで紹介する価値があるか」を判断し、その後のTikTok・ReadyAI・レビュー分析・比較記事まで使える商品データベースを作ることです。
+
+商品ごとの差を重視してください。
+テンプレートのような文章は禁止です。
+商品固有の特徴・メリット・弱点・購入理由を深く分析してください。
 
 ==============================
 【入力】
 ==============================
 
 商品名：${name}
-
 メーカー公式URL：${officialUrl}
-
 販売ページURL：${salesUrl}
 
-比較したい商品：
+不足情報があれば補完してください。
 
 ==============================
-【出力】
+【調査内容と出力】
 ==============================
 
 # 【基本情報】
@@ -52,22 +44,25 @@ function buildPromptTemplate(item, u) {
 - 型番
 - 発売日
 - 価格
+- JANコード
+- 商品画像URL
 - 公式URL
 - 販売URL
-- 商品画像URL
-- JANコード
 
 # 【商品理解】
 
+商品の特徴を並べるだけではなく、「なぜその機能が必要なのか」まで説明してください。
+
 - 商品概要
 - 解決する悩み
+- この商品が存在する理由
 - 主な機能
 - 強み
 - 弱み
 - 向いている人
 - 向いていない人
 - 使用シーン
-- 購入理由（なぜ選ばれるか）
+- 購入理由
 - 比較される商品
 - 競合商品
 - 購入前に悩まれるポイント
@@ -75,71 +70,85 @@ function buildPromptTemplate(item, u) {
 
 # 【レビュー分析】
 
-- 楽天レビュー要約
-- Amazonレビュー要約
+複数のレビューを分析し、件数ではなく傾向をまとめてください。個別レビューをそのまま転載しないこと。
+
 - 高評価で多い意見
 - 低評価で多い意見
 - 長期使用レビュー
-- バッテリー評価
 - 耐久性
-- 替刃・消耗品コスト
-- 肌質別評価
+- バッテリー評価（該当商品のみ）
+- 品質
+- 初期不良傾向
+- サポート評価
 - レビュー総評
 
-# 【市場分析】
+# 【競合分析】
 
-- TikTokで伸びている訴求
-- TikTok投稿傾向
-- YouTubeレビュー傾向
-- Google検索ニーズ
-- 30〜40代男性の購入理由
-- 買われない理由
-- 差別化ポイント
-- 市場での立ち位置
+競合商品と比較して整理してください。
+
+- この商品を選ぶ理由
+- 他を選ぶ理由
+- 勝っている点
+- 負けている点
 
 # 【UPGEAR評価】
+
+以下5項目を20点満点で採点し、合計100点で評価してください。
+点数だけではなく「なぜその点数なのか」を必ず説明してください。
 
 - 装備性
 - 判断削減力
 - 継続運用性
-- コスパ
-- デザイン性
+- ミスマッチ明確性
+- 代替不可能性
 - 総合点（100点満点）
+- 認定判定（認定／条件付き認定／非認定）
 - 評価理由
 - 一言まとめ
 
-# 【SNS用】
+# 【TikTok分析】
 
-- TikTok訴求
+- 一番刺さる悩み
+- 一番強い訴求ポイント
 - 投稿フック（5案）
-- 保存されやすいポイント
-- コメントが増えそうなテーマ
 - 避ける表現
+- 保存されやすいポイント
+- 比較すると面白い商品
 - 検索キーワード
 - ハッシュタグ候補
 
+# 【ReadyAI掲載用】
+
+- 150文字要約
+- 300文字要約
+- SEOキーワード
+- メタディスクリプション
+
+# 【編集長コメント】
+
+一般論ではなく、この商品の特徴を踏まえた具体的な判断を行ってください。
+
+- ＵＰＧＥＡＲ編集長コメント
+  （紹介する価値があるか／どんな人に刺さるか／TikTokで伸びそうか／アフィリエイト向きか／長期的に紹介し続けられるか／最適な切り口）
+
 # 【AI用】
 
-- ChatGPT分析全文
 - 情報源（調査したサイト一覧）
 - 推定事項
 - 情報不足
-- 次に調査すべき項目
-- 作成日時
-- 更新日時
 
 ==============================
-【重要】
+【重要ルール】
 ==============================
 
-1. 一つの商品について可能な限り深く調査すること。
-2. 公式情報・レビュー・市場情報を横断して統合分析すること。
-3. 「この商品を知らない人でも理解できるレベル」の商品理解を作ること。
-4. UPGEARの商品マスターデータとして保存できる品質を目指すこと。
-5. 出力は必ず上記の構成・順番を守ること。
-6. 情報量を優先し、省略せず詳しく出力すること。長くなっても構わない。
-7. 回答が長くなる場合は途中で省略せず、「Part1」「Part2」…と分割して最後まで出力すること。
-8. 情報源ごとの内容を整理し、事実・レビュー傾向・AI分析を混同しないこと。`;
+- 商品ごとの差別化を最優先する。
+- テンプレート的な文章は禁止。
+- 推測と事実を明確に区別し、推測は「推定」と明記する。
+- 情報不足の項目は「情報未確認」と明記する。
+- レビューは傾向を要約し、個別レビューをそのまま転載しない。
+- 必要に応じて追加調査を行い、情報を統合する。
+- 出力は必ず上記の構成・順番・項目名を守ること（アプリが自動仕分けするため）。
+- 長くなる場合は「Part1」「Part2」…と分割して最後まで出力すること。`;
 }
 
 // ─── Field definitions ────────────────────────────────────────────────────────
@@ -169,6 +178,7 @@ const SECTIONS = [
     fields: [
       { key: "overview",        label: "商品概要",              type: "textarea", rows: 3 },
       { key: "problemSolved",   label: "解決する悩み",          type: "textarea", rows: 3 },
+      { key: "existReason",     label: "この商品が存在する理由", type: "textarea", rows: 2 },
       { key: "features",        label: "主な機能",              type: "textarea", rows: 3 },
       { key: "strengths",       label: "強み",                  type: "textarea", rows: 3 },
       { key: "weaknesses",      label: "弱み",                  type: "textarea", rows: 3 },
@@ -196,6 +206,9 @@ const SECTIONS = [
       { key: "durability",      label: "耐久性",               type: "textarea", rows: 2 },
       { key: "consumableCost",  label: "替刃・消耗品コスト",   type: "textarea", rows: 2 },
       { key: "skinTypeEval",    label: "肌質別評価",           type: "textarea", rows: 2 },
+      { key: "qualityEval",     label: "品質",                 type: "textarea", rows: 2 },
+      { key: "initialDefects",  label: "初期不良傾向",         type: "textarea", rows: 2 },
+      { key: "supportEval",     label: "サポート評価",         type: "textarea", rows: 2 },
       { key: "reviewSummary",   label: "レビュー総評",         type: "textarea", rows: 3 },
     ],
   },
@@ -215,18 +228,30 @@ const SECTIONS = [
     ],
   },
   {
+    id: "competitive",
+    label: "競合分析",
+    color: "#d19a66",
+    fields: [
+      { key: "whyChooseThis",  label: "この商品を選ぶ理由", type: "textarea", rows: 3 },
+      { key: "whyChooseOther", label: "他を選ぶ理由",       type: "textarea", rows: 3 },
+      { key: "winPoints",      label: "勝っている点",       type: "textarea", rows: 2 },
+      { key: "losePoints",     label: "負けている点",       type: "textarea", rows: 2 },
+    ],
+  },
+  {
     id: "upgear",
     label: "UPGEAR評価",
     color: "#98c379",
     fields: [
-      { key: "gearScore",         label: "装備性（0〜10）",   type: "text" },
-      { key: "judgmentReduction", label: "判断削減力（0〜10）", type: "text" },
-      { key: "continuity",        label: "継続運用性（0〜10）", type: "text" },
-      { key: "costPerformance",   label: "コスパ（0〜10）",   type: "text" },
-      { key: "designScore",       label: "デザイン性（0〜10）",type: "text" },
-      { key: "totalScore",        label: "総合点（0〜100）",  type: "text" },
-      { key: "evalReason",        label: "評価理由",          type: "textarea", rows: 3 },
-      { key: "oneLiner",          label: "一言まとめ",        type: "textarea", rows: 2 },
+      { key: "gearScore",         label: "装備性（0〜20）",       type: "text" },
+      { key: "judgmentReduction", label: "判断削減力（0〜20）",   type: "text" },
+      { key: "continuity",        label: "継続運用性（0〜20）",   type: "text" },
+      { key: "mismatchClarity",   label: "ミスマッチ明確性（0〜20）", type: "text" },
+      { key: "irreplaceability",  label: "代替不可能性（0〜20）", type: "text" },
+      { key: "totalScore",        label: "総合点（0〜100）",      type: "text" },
+      { key: "certification",     label: "認定判定",              type: "text" },
+      { key: "evalReason",        label: "評価理由",              type: "textarea", rows: 3 },
+      { key: "oneLiner",          label: "一言まとめ",            type: "textarea", rows: 2 },
     ],
   },
   {
@@ -234,6 +259,8 @@ const SECTIONS = [
     label: "SNS用",
     color: "#e5c07b",
     fields: [
+      { key: "topPain",           label: "一番刺さる悩み",           type: "textarea", rows: 2 },
+      { key: "topAppeal",         label: "一番強い訴求ポイント",     type: "textarea", rows: 2 },
       { key: "tiktokAngles",      label: "TikTok訴求",              type: "textarea", rows: 3 },
       { key: "hook",              label: "投稿フック（5案）",        type: "textarea", rows: 4 },
       { key: "saveablePoints",    label: "保存されやすいポイント",   type: "textarea", rows: 2 },
@@ -241,6 +268,18 @@ const SECTIONS = [
       { key: "avoidExpressions",  label: "避ける表現",               type: "textarea", rows: 2 },
       { key: "searchKeywords",    label: "検索キーワード",           type: "textarea", rows: 2 },
       { key: "hashtags",          label: "ハッシュタグ候補",         type: "textarea", rows: 2 },
+      { key: "funCompare",        label: "比較すると面白い商品",     type: "textarea", rows: 2 },
+    ],
+  },
+  {
+    id: "readyai",
+    label: "ReadyAI用",
+    color: "#61afef",
+    fields: [
+      { key: "summary150",      label: "150文字要約",         type: "textarea", rows: 3 },
+      { key: "summary300",      label: "300文字要約",         type: "textarea", rows: 5 },
+      { key: "seoKeywords",     label: "SEOキーワード",       type: "textarea", rows: 2 },
+      { key: "metaDescription", label: "メタディスクリプション", type: "textarea", rows: 2 },
     ],
   },
   {
@@ -248,6 +287,7 @@ const SECTIONS = [
     label: "AI用",
     color: "#c678dd",
     fields: [
+      { key: "editorComment",     label: "ＵＰＧＥＡＲ編集長コメント", type: "textarea", rows: 5 },
       { key: "chatgptFullText",   label: "ChatGPT分析全文",       type: "textarea", rows: 12, large: true },
       { key: "sources",           label: "情報源（調査サイト一覧）", type: "textarea", rows: 3 },
       { key: "estimations",       label: "推定事項",              type: "textarea", rows: 2 },
@@ -357,8 +397,8 @@ function buildCopyText(name, u) {
     u.gearScore         && `装備性:${u.gearScore}`,
     u.judgmentReduction && `判断削減力:${u.judgmentReduction}`,
     u.continuity        && `継続運用性:${u.continuity}`,
-    u.costPerformance   && `コスパ:${u.costPerformance}`,
-    u.designScore       && `デザイン性:${u.designScore}`,
+    u.mismatchClarity   && `ミスマッチ明確性:${u.mismatchClarity}`,
+    u.irreplaceability  && `代替不可能性:${u.irreplaceability}`,
   ].filter(Boolean).join("　／　");
 
   return `# 商品理解データ ― ${name || "商品名未設定"}
@@ -390,15 +430,29 @@ ${line("楽天レビュー要約", u.rakutenReview)}${line("Amazonレビュー�
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${line("TikTokで伸びている訴求", u.tiktokTrends)}${line("TikTok投稿傾向", u.tiktokPattern)}${line("YouTubeレビュー傾向", u.youtubePattern)}${line("Google検索ニーズ", u.googleNeeds)}${line("30〜40代男性の購入理由", u.mensBuyReason)}${line("買われない理由", u.notBoughtReason)}${line("差別化ポイント", u.differentiation)}${line("市場での立ち位置", u.marketPosition)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【競合分析】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${line("この商品を選ぶ理由", u.whyChooseThis)}${line("他を選ぶ理由", u.whyChooseOther)}${line("勝っている点", u.winPoints)}${line("負けている点", u.losePoints)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【UPGEAR評価】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${scores}
 総合点：${u.totalScore || ""}
+認定判定：${u.certification || ""}
 ${line("評価理由", u.evalReason)}${line("一言まとめ", u.oneLiner)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【SNS用】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${line("TikTok訴求", u.tiktokAngles)}${line("投稿フック（5案）", u.hook)}${line("保存されやすいポイント", u.saveablePoints)}${line("コメントが増えそうなテーマ", u.commentThemes)}${line("避ける表現", u.avoidExpressions)}${line("検索キーワード", u.searchKeywords)}${line("ハッシュタグ候補", u.hashtags)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【ReadyAI掲載用】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${line("150文字要約", u.summary150)}${line("300文字要約", u.summary300)}${line("SEOキーワード", u.seoKeywords)}${line("メタディスクリプション", u.metaDescription)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【編集長コメント】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${u.editorComment || "（未記入）"}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【ChatGPT分析全文】
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -579,6 +633,54 @@ const LABEL_MAP = {
   "次に調査すべき項目":       "nextResearch",
   "作成日時":                 "createdAt",
   "更新日時":                 "updatedAt",
+
+  // 商品理解（新エージェント項目）
+  "この商品が存在する理由":   "existReason",
+  "存在する理由":             "existReason",
+  "購入理由（なぜ選ばれるのか）": "buyReason",
+
+  // レビュー分析（新エージェント項目）
+  "高評価で多い内容":         "positiveReviews",
+  "低評価で多い内容":         "negativeReviews",
+  "品質":                     "qualityEval",
+  "初期不良傾向":             "initialDefects",
+  "初期不良":                 "initialDefects",
+  "サポート評価":             "supportEval",
+  "バッテリー評価（該当商品のみ）": "batteryEval",
+
+  // 競合分析
+  "この商品を選ぶ理由":       "whyChooseThis",
+  "他を選ぶ理由":             "whyChooseOther",
+  "勝っている点":             "winPoints",
+  "負けている点":             "losePoints",
+
+  // UPGEAR評価（新軸）
+  "ミスマッチ明確性":         "mismatchClarity",
+  "代替不可能性":             "irreplaceability",
+  "認定判定":                 "certification",
+  "認定判定（認定／条件付き認定／非認定）": "certification",
+
+  // TikTok分析
+  "一番刺さる悩み":           "topPain",
+  "一番強い訴求ポイント":     "topAppeal",
+  "冒頭3秒で使えるフック案（5案）": "hook",
+  "冒頭3秒フック（5案）":     "hook",
+  "避けるべき訴求":           "avoidExpressions",
+  "保存されやすい切り口":     "saveablePoints",
+  "比較すると面白い商品":     "funCompare",
+
+  // ReadyAI掲載用
+  "150文字要約":              "summary150",
+  "300文字要約":              "summary300",
+  "seoキーワード":            "seoKeywords",
+  "SEOキーワード":            "seoKeywords",
+  "メタディスクリプション":   "metaDescription",
+
+  // 編集長コメント
+  "ＵＰＧＥＡＲ編集長コメント": "editorComment",
+  "UPGEAR編集長コメント":     "editorComment",
+  "upgear編集長コメント":     "editorComment",
+  "編集長コメント":           "editorComment",
 };
 
 /**
